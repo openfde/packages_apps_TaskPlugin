@@ -1,0 +1,75 @@
+plugins {
+    id 'com.android.application'
+    id 'org.jetbrains.kotlin.android'
+}
+
+android {
+    namespace 'com.fde.taskplugin'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.fde.taskplugin"
+        minSdkVersion 30
+        targetSdkVersion 34
+        versionCode 1
+        versionName "1.0"
+    }
+
+    signingConfigs {
+        release {
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            storeFile file('plugin.keystore')
+            storePassword 'android'
+        }
+        debug {
+            keyAlias 'androiddebugkey'
+            keyPassword 'android'
+            storeFile file('plugin.keystore')
+            storePassword 'android'
+        }
+    }
+
+    buildTypes {
+        release {
+            signingConfig signingConfigs.release
+            minifyEnabled false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+        debug {
+            signingConfig signingConfigs.debug
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    lint {
+        abortOnError false
+    }
+}
+
+configurations {
+    // Kotlin stdlib is bundled in SystemUISharedLib.jar; avoid pulling in a second copy
+    // from maven that could mismatch the version used by the host process.
+    implementation.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib'
+    implementation.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-common'
+    implementation.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk8'
+    implementation.exclude group: 'org.jetbrains.kotlin', module: 'kotlin-stdlib-jdk7'
+    implementation.exclude group: 'org.jetbrains', module: 'annotations'
+}
+
+dependencies {
+    // Host (launcher) provides the plugin API classes (com.android.systemui.plugins.*)
+    // via its filtered parent ClassLoader, so they must NOT be packaged into the APK.
+    compileOnly files('libs/framework.jar')
+    compileOnly files('libs/launcher-plugin-api.jar')
+    // Bundled into the APK: provides kotlin stdlib (and Plugin core classes) at runtime.
+    implementation files('libs/SystemUISharedLib.jar')
+}

@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <uses-permission android:name="com.android.systemui.permission.PLUGIN"
+        android:protectionLevel="signature" />
+
+    <application
+        android:label="@string/plugin_label"
+        tools:ignore="AllowBackup,MissingApplicationIcon">
+
+        <service
+            android:name=".TaskbarOverlay"
+            android:exported="false"
+            android:label="@string/plugin_label">
+            <intent-filter>
+                <action android:name="com.android.launcher3.action.PLUGIN_TASKBAR" />
+            </intent-filter>
+        </service>
+
+    </application>
+
+</manifest>
