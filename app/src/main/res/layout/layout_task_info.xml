@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="44dp"
+    android:paddingLeft="1dp"
+    android:layout_height="match_parent">
+    <FrameLayout
+        android:id="@+id/layoutTask"
+        android:layout_width="42dp"
+        android:layout_height="42dp"
+        android:layout_gravity="center"
+        android:orientation="vertical"
+        android:background="#00000000"
+        >
+        <ImageView
+            android:id="@+id/iv_task_info_icon"
+            android:layout_width="@dimen/task_info_icon_size"
+            android:layout_height="@dimen/task_info_icon_size"
+            android:layout_gravity="center"
+            tools:ignore="ContentDescription" />
+
+        <ImageView
+            android:id="@+id/iv_highlight_line"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_gravity="center_horizontal|bottom"
+            android:layout_marginBottom="1dp"
+            tools:ignore="ContentDescription" />
+
+        <View
+            android:id="@+id/mask"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"/>
+    </FrameLayout>
+
+
+
+
+</LinearLayout>

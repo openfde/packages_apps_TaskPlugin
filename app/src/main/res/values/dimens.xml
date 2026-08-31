@@ -1,0 +1,166 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <dimen name="nav_button_size">32dp</dimen>
+    <dimen name="all_apps_window_width">754dp</dimen>
+    <dimen name="all_apps_window_height">604dp</dimen>
+    <dimen name="all_apps_item_spacing_horizontal">10dp</dimen>
+    <dimen name="all_apps_item_spacing_vertical">10dp</dimen>
+    <dimen name="all_apps_item_width">70dp</dimen>
+    <dimen name="all_apps_item_height">48dp</dimen>
+    <dimen name="collect_app_icon_size">32dp</dimen>
+    <dimen name="all_apps_corner_radius">8dp</dimen>
+    <dimen name="app_info_name_text_size">14sp</dimen>
+    <dimen name="app_collect_name_text_size">16sp</dimen>
+    <dimen name="app_info_icon_width">32dp</dimen>
+    <dimen name="app_info_icon_height">32dp</dimen>
+    <dimen name="app_info_icon_size">28dp</dimen>
+    <dimen name="all_apps_margin_vertical">20dp</dimen>
+    <dimen name="all_apps_margin_vertical_bottom">20dp</dimen>
+    <dimen name="all_apps_margin_horizontal">10dp</dimen>
+    <dimen name="all_apps_window_margin_horizontal">10dp</dimen>
+    <dimen name="all_apps_window_margin_vertical">10dp</dimen>
+    <dimen name="task_info_icon_size">26dp</dimen>
+    <dimen name="line_long_width">12dp</dimen>
+    <dimen name="line_long_height">2dp</dimen>
+    <dimen name="line_short_width">12dp</dimen>
+    <dimen name="line_short_height">2dp</dimen>
+    <dimen name="iv_highlight_line_margin_top">5dp</dimen>
+    <dimen name="task_info_item_padding_horizontal">7dp</dimen>
+    <dimen name="all_apps_padding_vertical">5dp</dimen>
+    <dimen name="all_apps_padding_horizontal">5dp</dimen>
+    <dimen name="control_bt_size">50dp</dimen>
+
+    <dimen name="wifi_status_window_width">100dp</dimen>
+    <dimen name="wifi_status_window_height">36dp</dimen>
+
+    <dimen name="fde_left_setting_size">16dp</dimen>
+    <dimen name="fde_left_setting_padding_size">8dp</dimen>
+
+    <dimen name="net_center_input_window_width">312dp</dimen>
+    <dimen name="net_center_input_window_height">170dp</dimen>
+
+    <dimen name="net_center_wifi_list_height">360dp</dimen>
+    <dimen name="net_center_window_width">376dp</dimen>
+    <dimen name="net_center_window_height">480dp</dimen>
+    <dimen name="net_center_window_margin">113dp</dimen>
+    <dimen name="net_center_wifi_title_font">16sp</dimen>
+    <dimen name="net_center_wifi_padding">20dp</dimen>
+    <dimen name="net_common_font_size">14sp</dimen>
+    <dimen name="net_list_height">150dp</dimen>
+    <dimen name="net_loading_height">300dp</dimen>
+
+    <dimen name="control_center_window_width">406dp</dimen>
+    <dimen name="control_center_window_height">348dp</dimen>
+    <dimen name="control_center_window_margin">8dp</dimen>
+    <dimen name="control_center_window_radius">12dp</dimen>
+    <dimen name="control_info_width">110dp</dimen>
+    <dimen name="control_info_height">82dp</dimen>
+    <dimen name="control_info_decoration_h">14dp</dimen>
+    <dimen name="control_info_decoration_v">24dp</dimen>
+    <dimen name="control_text_size">14px</dimen>
+    <dimen name="systemstate_icon_size">32dp</dimen>
+    <dimen name="system_state_icon_padding">7dp</dimen>
+
+
+    <dimen name="notification_window_width">406dp</dimen>
+    <dimen name="notification_window_height">406dp</dimen>
+    <dimen name="notification_info_width">374dp</dimen>
+    <dimen name="notification_info_height">106dp</dimen>
+    <dimen name="notification_info_height_expand">114dp</dimen>
+
+    <dimen name="notification_decoration">80dp</dimen>
+
+
+    <dimen name="volume_center_wifi_list_height">360dp</dimen>
+    <dimen name="volume_center_window_width">376dp</dimen>
+    <dimen name="volume_center_window_height">480dp</dimen>
+    <dimen name="volume_center_window_margin">65dp</dimen>
+    <dimen name="volume_center_wifi_title_font">16sp</dimen>
+    <dimen name="volume_center_wifi_padding">20dp</dimen>
+    <dimen name="volume_common_font_size">14sp</dimen>
+    <dimen name="volume_list_height">150dp</dimen>
+    <dimen name="volume_loading_height">300dp</dimen>
+
+    <dimen name="ime_switch_window_width">180dp</dimen>
+    <dimen name="ime_switch_window_width_expand">210dp</dimen>
+    <dimen name="ime_switch_window_height">110dp</dimen>
+    <dimen name="ime_switch_window_margin">240dp</dimen>
+    <dimen name="item_ime_height">34dp</dimen>
+    <dimen name="ime_margin_vert">65dp</dimen>
+    <dimen name="ime_window_padding">15dp</dimen>
+
+    <dimen name="volume_window_width_expand">394dp</dimen>
+    <dimen name="volume_window_height_expand">476dp</dimen>
+
+    <dimen name="volume_window_width">376dp</dimen>
+    <dimen name="volume_window_height">460dp</dimen>
+
+    <dimen name="top_bar_layout_width">1920dp</dimen>
+    <dimen name="top_bar_layout_height">32dp</dimen>
+    <dimen name="topbar_icon_size">32dp</dimen>
+    <dimen name="topbar_icon_padding">7dp</dimen>
+    <dimen name="topbar_icon_tray_padding">3dp</dimen>
+    <dimen name="top_bar_power_width">150dp</dimen>
+    <dimen name="top_bar_power_height">254dp</dimen>
+    <dimen name="top_bar_power_height_small">125dp</dimen>
+    <dimen name="top_text_margin">4dp</dimen>
+    <dimen name="top_text_padding">20dp</dimen>
+    <dimen name="top_bar_about_width">430dp</dimen>
+    <dimen name="top_bar_about_height">516dp</dimen>
+    <dimen name="top_bar_control_width">376dp</dimen>
+    <dimen name="top_bar_control_height">434dp</dimen>
+    <dimen name="top_bar_control_width_expand">392dp</dimen>
+    <dimen name="top_bar_control_height_expand">520dp</dimen>
+    <dimen name="elevation_control_panel">3dp</dimen>
+    <dimen name="radius_control_panel">12dp</dimen>
+    <dimen name="card_elevation_control_panel">10dp</dimen>
+
+    <dimen name="top_bar_notification_width">406dp</dimen>
+    <dimen name="top_bar_notification_height_item">150dp</dimen>
+    <dimen name="top_bar_notification_height_devide">8dp</dimen>
+    <dimen name="top_bar_notification_margin_vert">13dp</dimen>
+    <dimen name="top_bar_notification_fade_length">10dp</dimen>
+    <dimen name="top_bar_reverse_height">80dp</dimen>
+    <dimen name="control_window_padding">8dp</dimen>
+
+
+    <dimen name="top_bar_single_notification_width">398dp</dimen>
+    <dimen name="top_bar_single_notification_height">130dp</dimen>
+
+    <dimen name="top_bar_search_width">680dp</dimen>
+    <dimen name="top_bar_search_width_expand">720dp</dimen>
+
+
+    <dimen name="top_bar_search_height">56dp</dimen>
+    <dimen name="top_bar_search_height_expand">76dp</dimen>
+
+    <dimen name="dock_context_width_expand">230dp</dimen>
+    <dimen name="dock_context_width_small">150dp</dimen>
+    <dimen name="dock_context_width">176dp</dimen>
+    <dimen name="dock_context_height">114dp</dimen>
+
+    <dimen name="overview_app_icon_size">80dp</dimen>
+    <dimen name="overview_context_width">185dp</dimen>
+    <dimen name="overview_context_height">147dp</dimen>
+    <dimen name="overview_badge_icon_size">40dp</dimen>
+    <dimen name="dock_app_layout_height">68dp</dimen>
+    <dimen name="dock_icon_width">42dp</dimen>
+    <dimen name="dock_width_margin">20dp</dimen>
+    <dimen name="dock_icon_margin">5dp</dimen>
+    <dimen name="dock_group_margin">8dp</dimen>
+    <dimen name="control_item_width">68dp</dimen>
+    <dimen name="overview_recycle_padding">180dp</dimen>
+    <dimen name="dock_badge_width">25dp</dimen>
+    <dimen name="dock_status_margin">1dp</dimen>
+    <dimen name="dock_status_width">8dp</dimen>
+    <dimen name="dock_context_divider_height">6dp</dimen>
+    <dimen name="dock_divide_padding">8dp</dimen>
+    <dimen name="overview_app_height">190dp</dimen>
+    <dimen name="overview_app_width">188dp</dimen>
+    <dimen name="overview_row_spacing_min">1dp</dimen>
+    <dimen name="overview_margin_top">105dp</dimen>
+    <dimen name="overview_margin_bottom">135dp</dimen>
+    <dimen name="overview_indicator_margin">100dp</dimen>
+    <dimen name="overview_indicator_middle_gap">20dp</dimen>
+    <dimen name="overview_indicator_height">16dp</dimen>
+</resources>

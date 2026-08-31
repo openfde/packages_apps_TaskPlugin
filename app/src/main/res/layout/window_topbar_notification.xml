@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="@dimen/notification_window_width"
+    android:layout_height="match_parent"
+    android:background="@android:color/transparent"
+    >
+
+    <RelativeLayout
+        android:id="@+id/top"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:layout_marginStart="28dp"
+        android:layout_marginEnd="16dp"
+        >
+        <TextView
+            android:id="@+id/count_tv"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:textColor="#ff292929"
+            android:textSize="16sp"
+            android:text=""
+            style="@style/style_55"
+            />
+
+        <com.fde.taskplugin.view.LoadedCardView
+            android:layout_width="80dp"
+            android:layout_height="wrap_content"
+            android:layout_centerVertical="true"
+            android:layout_alignParentRight="true"
+            android:elevation="6dp"
+            app:cardBackgroundColor="#99FFFFFF"
+            app:cardCornerRadius="16dp"
+            >
+            <TextView
+                android:layout_gravity="center"
+                android:id="@+id/clear_tv"
+                android:layout_width="80dp"
+                android:layout_height="wrap_content"
+                android:textColor="#ff292929"
+                android:textSize="14sp"
+                android:gravity="center"
+                android:text="@string/clear_text"
+                android:background="@drawable/notification_ellipse"
+                style="@style/style_55"
+                />
+        </com.fde.taskplugin.view.LoadedCardView>
+    </RelativeLayout>
+
+
+    <com.fde.taskplugin.view.NotificationListView
+        android:id="@+id/notification_rv"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="@dimen/all_apps_margin_horizontal"
+        android:layout_marginTop="10dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="13dp"
+        android:requiresFadingEdge="vertical"
+        android:fadingEdgeLength="@dimen/top_bar_notification_fade_length"
+        android:layout_below="@+id/top"
+        android:scrollbars="none"
+        />
+
+</RelativeLayout>

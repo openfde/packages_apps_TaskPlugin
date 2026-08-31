@@ -1,0 +1,98 @@
+<?xml version="1.0" encoding="utf-8"?>
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    >
+
+
+<!--    width = 1920 x 1.1-->
+<!--    height = 1080 x 1.1-->
+    <ImageView
+        android:id="@+id/bg_iv"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"
+        />
+    <LinearLayout
+        android:orientation="vertical"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:gravity="center_horizontal"
+        android:background="#5915191F">
+        <RelativeLayout
+            android:orientation="vertical"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center_horizontal"
+            android:background="#5915191F">
+            <View
+                android:id="@+id/bg_view"
+                android:layout_width="match_parent"
+                android:layout_height="match_parent"
+                />
+            <LinearLayout
+                android:id="@+id/search_ll"
+                android:layout_marginTop="40dp"
+                android:layout_width="320dp"
+                android:layout_height="wrap_content"
+                android:paddingVertical="12dp"
+                android:layout_centerHorizontal="true"
+                android:background="@drawable/round_rect_6dp_1f"
+        >
+
+                <ImageView
+                    android:id="@+id/search_iv"
+                    android:layout_marginLeft="100dp"
+                    android:layout_width="16dp"
+                    android:layout_height="16dp"
+                    android:src="@drawable/icon_search_light"
+                    android:layout_marginRight="8dp"
+                    android:layout_gravity="center_vertical"
+                    />
+                <EditText
+                    android:id="@+id/search_et"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="16sp"
+                    android:gravity="center_vertical"
+                    android:hint="@string/search_all_app"
+                    android:inputType="text"
+                    style="@style/textInputEditTextStyle"
+                    android:textColorHint="#59FFFFFF"
+                    android:background="@null"
+                    android:singleLine="true"
+                    android:layout_gravity="center_vertical"
+                    />
+
+            </LinearLayout>
+
+
+            <com.fde.taskplugin.view.LoadedViewPager
+                android:id="@+id/apps_vp"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:overScrollMode="never"
+                android:layout_marginTop="@dimen/overview_margin_top"
+                android:layout_marginBottom="@dimen/overview_margin_bottom"
+                />
+
+            <com.fde.taskplugin.view.LoadedIndicator
+                android:id="@+id/indicator_mi"
+                android:layout_centerHorizontal="true"
+                android:layout_alignParentBottom="true"
+                android:layout_width="wrap_content"
+                android:layout_height="16dp"
+                android:layout_marginBottom="@dimen/overview_indicator_margin"
+                />
+
+<!--            <com.fde.taskplugin.view.LoadedRecycleView-->
+<!--                android:id="@+id/applist_rv"-->
+<!--                android:layout_width="match_parent"-->
+<!--                android:layout_height="wrap_content"-->
+<!--                android:layout_marginTop="40dp"-->
+<!--                android:layout_marginHorizontal="254dp"-->
+<!--                android:layout_marginBottom="152dp"-->
+<!--                />-->
+        </RelativeLayout>
+    </LinearLayout>
+</FrameLayout>

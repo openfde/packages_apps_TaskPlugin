@@ -1,0 +1,200 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:id="@+id/root_rl">
+
+    <com.fde.taskplugin.view.LoadedCardView
+        android:id="@+id/root_blur"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        app:cardElevation="6dp"
+        android:layout_margin="15dp"
+        app:cardCornerRadius="12dp"
+        >
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/round_rect_12dp_about"
+            android:layout_gravity="center"
+            >
+            <ImageView
+                android:id="@+id/icon_iv"
+                android:layout_width="80dp"
+                android:layout_height="80dp"
+                android:layout_marginTop="48dp"
+                android:src="@drawable/icon_all_apps"
+                android:layout_centerHorizontal="true"
+                />
+
+            <TextView
+                android:layout_below="@+id/icon_iv"
+                android:id="@+id/device_tv"
+                android:layout_centerHorizontal="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="24dp"
+                android:textSize="24sp"
+                android:textColor="#ff292929"
+                android:text="D2000"
+                style="@style/style_55"
+                />
+
+            <ImageView
+                android:id="@+id/close_iv"
+                android:layout_width="16dp"
+                android:layout_height="16dp"
+                android:layout_marginTop="10dp"
+                android:layout_alignParentRight="true"
+                android:layout_marginEnd="10dp"
+                android:src="@drawable/icon_close" />
+
+            <TextView
+                android:id="@+id/version_tv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#ff6C717A"
+                android:textSize="15sp"
+                android:layout_marginTop="15dp"
+                android:layout_below="@id/device_tv"
+                android:layout_centerHorizontal="true"
+                style="@style/style_55"
+                android:text="OpenFDE 2.0.1" />
+
+            <Button
+                android:id="@+id/checkversion_bt"
+                android:layout_below="@id/version_tv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:visibility="invisible"
+                android:text="@string/check_verson" />
+
+            <LinearLayout
+                android:id="@+id/update_ll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_below="@id/checkversion_bt"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:visibility="invisible"
+                >
+                <Button
+                    android:id="@+id/update_bt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="@string/update_to_version"
+                    />
+            </LinearLayout>
+
+
+            <LinearLayout
+                android:id="@+id/install_ll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:layout_below="@id/version_tv"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+                <Button
+                    android:layout_weight="1"
+                    android:id="@+id/update_now"
+                    android:text="@string/update_now"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+                <Button
+                    android:layout_weight="1"
+                    android:id="@+id/update_later"
+                    android:text="@string/update_next"
+                    android:layout_marginLeft="30dp"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <TextView
+                    android:layout_weight="1"
+                    android:id="@+id/install_now_tv"
+                    android:text="@string/update_now"
+                    android:visibility="gone"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+
+                <TextView
+                    android:layout_weight="1"
+                    android:text="@string/update_next"
+                    android:visibility="gone"
+                    android:id="@+id/install_later_tv"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"/>
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/install_path"
+                android:layout_below="@id/install_ll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:visibility="gone"
+                android:layout_marginHorizontal="50dp"
+                />
+
+
+            <LinearLayout
+                android:id="@+id/download_ll"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:layout_below="@id/version_tv"
+                android:orientation="horizontal"
+                android:gravity="center_vertical"
+                android:visibility="invisible"
+                >
+                <LinearLayout
+                    android:layout_width="210dp"
+                    android:layout_height="80dp"
+                    android:orientation="vertical"
+                    >
+                    <TextView
+                        android:id="@+id/filename_tv"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:textSize="16sp"
+                        android:textStyle="bold"
+                        android:maxLines="1"
+                        android:ellipsize="end" />
+                    <ProgressBar
+                        android:id="@+id/progressbar"
+                        style="?android:attr/progressBarStyleHorizontal"
+                        android:layout_width="match_parent"
+                        android:progress="0"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" />
+                </LinearLayout>
+                <Button
+                    android:layout_marginLeft="20dp"
+                    android:id="@+id/status_bt"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:maxLines="1"
+                    android:text="@string/pause"
+                    android:backgroundTint="@android:color/darker_gray" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/latested_tv"
+                android:layout_below="@id/checkversion_bt"
+                android:layout_marginTop="20dp"
+                android:layout_centerHorizontal="true"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/already_latest"
+                android:visibility="invisible"
+                />
+        </RelativeLayout>
+    </com.fde.taskplugin.view.LoadedCardView>
+</RelativeLayout>

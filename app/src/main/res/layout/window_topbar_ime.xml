@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:orientation="vertical"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    >
+
+    <com.fde.taskplugin.view.LoadedCardView
+        android:id="@+id/root_blur"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginVertical="8dp"
+        android:layout_marginHorizontal="15dp"
+        android:elevation="12dp"
+        app:cardCornerRadius="8dp"
+        >
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/round_rect_8dp_search"
+            >
+            <com.fde.taskplugin.view.LoadedImeRecycleView
+                android:id="@+id/ime_Rv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"/>
+            <View
+                android:layout_width="match_parent"
+                android:layout_height="1dp"
+                android:background="#1a000000"
+                />
+            <TextView
+                android:id="@+id/setting_tv"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="@string/ime_setting"
+                android:layout_marginVertical="5dp"
+                android:textColor="#e6000000"
+                android:textSize="14sp"
+                android:layout_marginLeft="14dp"
+                />
+            
+        </LinearLayout>
+    </com.fde.taskplugin.view.LoadedCardView>
+</LinearLayout>
