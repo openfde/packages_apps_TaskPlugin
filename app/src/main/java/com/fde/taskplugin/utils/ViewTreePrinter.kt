@@ -5,7 +5,7 @@ import android.view.ViewGroup
 import android.util.Log
 
 object ViewTreePrinter {
-    private const val TAG = "ViewTreePrinter"
+    private const val TAG = "TaskbarViewTreePrinter"
 
     /**
      * 遍历整个 ViewTree 并打印所有 View 的信息

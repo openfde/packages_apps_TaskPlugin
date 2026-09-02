@@ -16,6 +16,7 @@ import androidx.cardview.widget.CardView
 import androidx.core.view.postDelayed
 import com.android.systemui.plugins.TaskbarPlugin
 import com.android.systemui.plugins.annotations.Requires
+import com.fde.taskplugin.provider.AllAppsProvider
 import com.fde.taskplugin.utils.SPUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.utils.ViewTreePrinter
@@ -37,6 +38,7 @@ class TaskbarOverlay : TaskbarPlugin {
     private var navi: ViewGroup ?= null
     private var mDockScaleFactor = 1.0f
     private val classLoader = TaskbarOverlay::class.java.classLoader
+    private var overviewProvider: AllAppsProvider?= null
 
 
     override fun onCreate(hostContext: Context, pluginContext: Context) {
@@ -48,7 +50,8 @@ class TaskbarOverlay : TaskbarPlugin {
         dockAppsLayout = dockAppsGroup?.findViewById(R.id.apps_rv)
         dockAppsGroup?.defaultFocusHighlightEnabled = false
         dockAppsLayout!!.reloadActivityManager(pluginContext)
-
+        overviewProvider = AllAppsProvider(pluginContext!!, dockAppsLayout)
+        dockAppsLayout?.overviewProvider = overviewProvider
 
     }
 
@@ -92,36 +95,30 @@ class TaskbarOverlay : TaskbarPlugin {
 
 
     override fun setup(taskbarRoot: ViewGroup) {
-        val ctx = pluginContext ?: return
-        val taskbarLayout =
-            LayoutInflater.from(ctx).inflate(R.layout.taskbar_plugin_layout, taskbarRoot, true)
-        taskbarRoot.visibility = View.VISIBLE
-        Log.d(TAG, "setup() called with: taskbarRoot = $taskbarRoot")
-        Log.d(TAG, "setup() called with: taskbarRoot = ${taskbarRoot?.parent}")
-        Log.d(TAG, "setup() called with: taskbarRoot = ${taskbarRoot?.parent?.parent}")
+        pluginContext ?: return
+        // taskbarRoot 现在是整个 taskbar 窗口根（全宽、70dp），插件直接往里面放 dock。
         navi = taskbarRoot
-        navi!!.postDelayed( 100, {
-            ViewTreePrinter.printViewTree(navi!!.parent as View)
-        })
+        navi!!.removeAllViews()
+        navi!!.visibility = View.VISIBLE
+        Log.d(TAG, "setup() called with: taskbarRoot = $taskbarRoot")
+        navi!!.postDelayed(100) {
+            ViewTreePrinter.printViewTree(navi!!)
+        }
         updateNaviDock()
-
     }
 
     private fun updateNaviDock() {
-        val childCount:Int = navi!!.childCount
         navi!!.removeAllViews()
-//        for (i in 0 until childCount) {
-//            val child = navi?.getChildAt(i)
-//            child?.visibility = View.GONE
-//        }
         dockAppsLayout?.onDestroy()
-        val layoutParams = navi?.layoutParams as FrameLayout.LayoutParams
-        layoutParams.width = FrameLayout.LayoutParams.WRAP_CONTENT
-        layoutParams.height = FrameLayout.LayoutParams.MATCH_PARENT
-        layoutParams.gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
-        navi?.layoutParams = layoutParams
-        val dockParams :FrameLayout.LayoutParams = FrameLayout.LayoutParams(FrameLayout.LayoutParams.WRAP_CONTENT, FrameLayout.LayoutParams.MATCH_PARENT)
-//        navi?.removeAllViews()
+        val height = pluginContext!!.resources.getDimension(R.dimen.dock_height).toInt()
+
+        // 不再改窗口根(navi)自身的 layoutParams，窗口由 launcher 管理为全宽 70dp；
+        // dock 以 WRAP_CONTENT 宽度、水平居中放进去即可。
+        val dockParams = FrameLayout.LayoutParams(
+            FrameLayout.LayoutParams.WRAP_CONTENT,
+            height,
+            Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
+        )
         navi?.addView(dockAppsGroup, dockParams)
         dockAppsLayout?.initApps(mDockScaleFactor)
         dockAppsLayout?.navi = navi
@@ -131,11 +128,7 @@ class TaskbarOverlay : TaskbarPlugin {
             dockAppsLayout?.updateNaviWindowFlags()
         }
         val mainHandler = Handler(Looper.getMainLooper())
-        mainHandler.postDelayed(object : Runnable {
-            override fun run() {
-                dockAppsLayout?.updateNaviWindowFlags()
-            }
-        }, 1000)
+        mainHandler.postDelayed({ dockAppsLayout?.updateNaviWindowFlags() }, 5000)
         if(Utils.getProperty("fde.systemui.blurlevel", 0) == 0){
 //            Log.d(TAG, "updateNaviDock() called blur")
             Utils.setBackgroundBlurRadius(dockAppsGroup?.findViewById(R.id.root_blur), 70, 16f)

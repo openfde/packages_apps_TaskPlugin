@@ -298,14 +298,14 @@ class AppOverviewWindow(
                 positionOffsetPixels: Int
             ) {
                 Log.d(
-                    "ViewPager",
+                    TAG,
                     "onPageScrolled() called with: position = $position, positionOffset = $positionOffset, positionOffsetPixels = $positionOffsetPixels"
                 )
                 indicatorMi?.onPageScrolled(position, positionOffset, positionOffsetPixels)
             }
 
             override fun onPageSelected(position: Int) {
-                Log.d("ViewPager", "onPageSelected() called with: position = $position")
+                Log.d(TAG, "onPageSelected() called with: position = $position")
                 indicatorMi?.onPageSelected(position)
 
             }
