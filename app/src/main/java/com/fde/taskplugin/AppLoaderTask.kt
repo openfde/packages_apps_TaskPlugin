@@ -123,10 +123,11 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
             .setCallbackToMainUIThread(true)
             .execute(object : JsonCallBack<AppListResult>() {
                 override fun onFailure(call: Call?, e: Exception?) {
-                    android.util.Log.d(TAG, "onFailure() called with: call = $call, e = $e")
+                    Log.d(TAG, "onFailure() called with: call = $call, e = $e")
                 }
 
                 override fun onSuccess(call: Call?, response: AppListResult?) {
+                    Log.d(TAG, "onSuccess() called with: call = $call, response = $response")
                     val data = response?.getData()?.getData()
                     loaderLinuxApps.clear()
                     if (data != null) {

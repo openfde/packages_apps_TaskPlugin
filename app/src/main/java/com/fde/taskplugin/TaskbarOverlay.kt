@@ -33,6 +33,8 @@ class TaskbarOverlay : TaskbarPlugin {
 
     private val TAG: String? = "TaskbarOverlay"
     private var pluginContext: Context? = null
+    private var hostContext: Context? = null
+
     private var dockAppsGroup: ViewGroup? = null
     private var dockAppsLayout: DockAppsLayout? = null
     private var navi: ViewGroup ?= null
@@ -43,7 +45,9 @@ class TaskbarOverlay : TaskbarPlugin {
 
     override fun onCreate(hostContext: Context, pluginContext: Context) {
         this.pluginContext = pluginContext
-        SPUtils.pluginContext = pluginContext
+        this.hostContext = hostContext
+        SPUtils.pluginContext = hostContext
+        GlobalSystemUIContext.setContext(hostContext)
         loadCustomViewsWithInflater(pluginContext!!)
 
         dockAppsGroup = initializeDockAppsGroup(this.pluginContext, dockAppsGroup)
@@ -52,6 +56,8 @@ class TaskbarOverlay : TaskbarPlugin {
         dockAppsLayout!!.reloadActivityManager(pluginContext)
         overviewProvider = AllAppsProvider(pluginContext!!, dockAppsLayout)
         dockAppsLayout?.overviewProvider = overviewProvider
+
+        Utils.getLinuxRootFileName(hostContext!!)
 
     }
 

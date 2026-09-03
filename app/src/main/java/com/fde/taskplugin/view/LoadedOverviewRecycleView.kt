@@ -135,6 +135,7 @@ constructor(
         ) {
             val appData = apps[position]
             if(appData?.linuxInfo != null){
+                Log.d(TAG, "onBindViewHolder() linuxpath=${Utils.linuxRootPath}${appData?.iconPath}")
                 if(appData.linuxInfo?.iconType == ImageUtils.SURFFIX_SVG || appData.linuxInfo?.iconType == ImageUtils.SURFFIX_SVGZ){
                     val svgDrawable = ImageUtils.getSVGDrawable(
                         "${Utils.linuxRootPath}${appData?.iconPath}",
