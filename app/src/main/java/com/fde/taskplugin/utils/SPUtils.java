@@ -14,6 +14,7 @@ import java.util.stream.Collectors;
 public class SPUtils {
     private static final String USER_INFO = "user_info";
     private static final String DOCK_APP = "dock_app";
+    private static final String APP_ICON_PATH = "app_icon_path";
     private static final String PERSIST_DOCK_APPS = "persist_dock_apps";
     private static final String TAG = "SPUtils";
     public static Context pluginContext;
@@ -83,4 +84,16 @@ public class SPUtils {
         SharedPreferences shared_user_info = context.getSharedPreferences(USER_INFO, context.MODE_PRIVATE);
         shared_user_info.edit().putInt(key, values).commit();
     }
+
+    public static void putIconPath(String app, String path){
+        SharedPreferences app_info = pluginContext.getSharedPreferences(APP_ICON_PATH, pluginContext.MODE_PRIVATE);
+        app_info.edit().putString(app, path).commit();
+    }
+
+    public static String getAppIconPath(String app){
+        SharedPreferences app_info = pluginContext.getSharedPreferences(APP_ICON_PATH, pluginContext.MODE_PRIVATE);
+        return app_info.getString(app, null);
+    }
+
+
 }

@@ -3,9 +3,9 @@ package com.fde.taskplugin.adapter
 import android.app.ActivityManager
 import android.app.ActivityManager.RunningTaskInfo
 import android.content.Context
-import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -34,6 +34,7 @@ import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AbsTopPopWindow
 import com.bumptech.glide.Glide
 import com.fde.taskplugin.data.DockContext
+import com.fde.taskplugin.utils.SPUtils
 import com.fde.taskplugin.view.DockAppsLayout
 import com.fde.taskplugin.view.DockContextWindow
 import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_ACTION
@@ -77,40 +78,65 @@ class DockAppAdapter(private val context: Context) :
         return apps.size
     }
 
+    private fun updateIconPath(info: TaskInfo) {
+        val app = info.packageName
+        if(!TextUtils.isEmpty(info.linuxInfo?.iconPath)){
+            if(TextUtils.isEmpty(SPUtils.getAppIconPath(app))){
+                SPUtils.putIconPath(app, info.linuxInfo?.iconPath)
+            }
+        }
+    }
+
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val app = apps[position]
         val info = app.linuxInfo
-        Log.d(TAG, "onBindViewHolder: ${app.program}  ${app.packageName} ${info != null && info.iconType.equals(ImageUtils.SURFFIX_PNG)}")
+        var loadMsg: String? = null
+        Glide.with(GlobalSystemUIContext.getContext()!!).clear(holder.iconIV)
         if(app.program.equals("Apps")){
             holder.iconIV.setImageResource(R.drawable.icon_menu)
+            loadMsg = "load ICON_MENU"
         } else if( !app.isLinux()){
             try {
                 val appIcon = packageManager.getApplicationIcon(app.packageName)
                 holder.iconIV.setImageDrawable(appIcon)
+                loadMsg = "load ANDROID"
             } catch (e: Exception) {
+                loadMsg = "load ANDROID ${e.message}"
                 e.printStackTrace()
             }
-
         } else if(info != null && info.iconType.equals(ImageUtils.SURFFIX_PNG)){
             Log.d(TAG, "Glide with png: ${Utils.linuxRootPath}${info.iconPath}")
+            updateIconPath(app)
             Glide.with(GlobalSystemUIContext.getContext()!!)
                 .load("${Utils.linuxRootPath}${info.iconPath}")
                 .centerCrop()
                 .placeholder(context.getDrawable(R.drawable.icon_menu))
-                .into(holder.iconIV);
+                .into(holder.iconIV)
+            loadMsg = "load LINUX PNG"
         } else if(info?.iconType == ImageUtils.SURFFIX_SVG || info?.iconType == ImageUtils.SURFFIX_SVGZ){
             Log.d(TAG, "Glide with svg: ${Utils.linuxRootPath}${info.iconPath}")
+            updateIconPath(app)
             val svgDrawable = ImageUtils.getSVGDrawable(
                 "${Utils.linuxRootPath}${info?.iconPath}",
                 context
             )
             Log.d(TAG, "onBindViewHolder: $svgDrawable")
             holder.iconIV.setImageDrawable(svgDrawable)
-
+            loadMsg = "load LINUX SVG"
         } else if(app.icon != null){
             holder.iconIV.setImageDrawable(app.icon)
+            loadMsg = "load ICON DRAWABLE"
+        } else if(app.isLinux()){
+            val appIconPath = "${Utils.linuxRootPath}${SPUtils.getAppIconPath(app.packageName)}"
+            Glide.with(GlobalSystemUIContext.getContext()!!)
+                .load(appIconPath)
+                .centerCrop()
+                .placeholder(context.getDrawable(R.drawable.icon_menu))
+                .into(holder.iconIV);
+            loadMsg = "load LINUX SP path:$appIconPath"
         }
+        Log.d(TAG, "onBindViewHolder: ${app.program}  ${app.packageName} ${info != null && info.iconType.equals(ImageUtils.SURFFIX_PNG)} loadMsg={$loadMsg}")
 
         if(app.getState() == STATE_UNFEFINED){
             holder.viewStatus.background = null

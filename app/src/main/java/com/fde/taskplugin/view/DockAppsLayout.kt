@@ -250,11 +250,12 @@ constructor(
     }
     fun initApps(dockScaleFactor: Float) {
         this.dockScaleFactor = dockScaleFactor
-        val provideApps = overviewProvider?.provideAppsWithFilterSync(TYPE_ALL, null)
-        if (provideApps != null) {
-            overviewApps.clear()
-            overviewApps.addAll(provideApps)
-        }
+        overviewProvider?.provideAppsWithFilterAsync(TYPE_ALL, null)
+//        val provideApps = overviewProvider?.provideAppsWithFilterAsync(TYPE_ALL, null)
+//        if (provideApps != null) {
+//            overviewApps.clear()
+//            overviewApps.addAll(provideApps)
+//        }
         dockProvider.providePersistApps();
         dockProvider.mayFillPersistTaskInfo()
         tasks.clear()
@@ -476,7 +477,7 @@ constructor(
                 if(ACTION_DOCK_OVERVIEW.equals(taskInfo.action)) {
 //                    context.sendBroadcast(Intent(action))
                     showAppsOverview()
-                    overviewProvider?.provideAppsWithFilterSync(TYPE_ALL, null)
+//                    overviewProvider?.provideAppsWithFilterSync(TYPE_ALL, null)
                 }else if(!TextUtils.isEmpty(taskInfo.packageName) && taskInfo.launchIntent != null){
                     val launchIntent = taskInfo.launchIntent
                     launchIntent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK
