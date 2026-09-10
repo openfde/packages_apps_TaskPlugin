@@ -44,6 +44,7 @@ import com.fde.taskplugin.provider.DockAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.AppUtils
+import com.fde.taskplugin.utils.HostActivityManager
 import com.fde.taskplugin.utils.ScreenSizeUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
@@ -101,10 +102,27 @@ constructor(
         holder?.let { itemTouchHelper?.startDrag(it) }
     }
 
+    private var taskPreviewWindow: TaskPreviewWindow? = null
+    private var previewTaskInfo: TaskInfo? = null
+    private var pendingPreviewTaskInfo: TaskInfo? = null
+    private var pendingPreviewAnchor: View? = null
+    private val previewHandler = Handler(Looper.getMainLooper())
+    private val hidePreviewRunnable = Runnable { dismissTaskPreview() }
+    private val showPreviewRunnable = Runnable {
+        Log.d(TAG, "showPreviewRunnable run pending=${pendingPreviewTaskInfo?.program}")
+        val info = pendingPreviewTaskInfo ?: return@Runnable
+        val anchor = pendingPreviewAnchor ?: return@Runnable
+        showTaskPreview(info, anchor)
+    }
+
     companion object {
         private const val TAG = "DockAppsLayout"
         private const val ACTION_SHORT_CUT = "com.android.launcher3.action.ADD_SHORT_CUT"
         private const val DRAG_LONG_PRESS_TIMEOUT = 100L
+        private const val PREVIEW_SHOW_DELAY = 350L
+        private const val PREVIEW_HIDE_DELAY = 220L
+        private const val PREVIEW_EDGE_MARGIN = 8
+        private const val PREVIEW_BOTTOM_GAP = 6
     }
 
     init {
@@ -119,6 +137,13 @@ constructor(
         dockProvider = DockAppsProvider(context, this)
 //        overviewProvider = AllAppsProvider(context, this)
         setupDragHelper()
+        addOnScrollListener(object : RecyclerView.OnScrollListener() {
+            override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
+                if (newState != RecyclerView.SCROLL_STATE_IDLE) {
+                    dismissTaskPreview()
+                }
+            }
+        })
     }
 
     private fun setupDragHelper() {
@@ -246,9 +271,11 @@ constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        dismissTaskPreview()
         dockProvider.unregisterTaskStackListener()
     }
     fun initApps(dockScaleFactor: Float) {
+        dismissTaskPreview()
         this.dockScaleFactor = dockScaleFactor
         overviewProvider?.provideAppsWithFilterAsync(TYPE_ALL, null)
 //        val provideApps = overviewProvider?.provideAppsWithFilterAsync(TYPE_ALL, null)
@@ -308,6 +335,7 @@ constructor(
             dockAppAdapter!!.setData(tasks)
             dockAppAdapter.notifyDataSetChangedWapper()
         }
+        updateTaskPreviewAfterDataChange()
     }
 
     override fun setTop(taskInfo: TaskInfo?, needAdd: Boolean, isTop: Boolean) {
@@ -325,6 +353,7 @@ constructor(
 //        Log.d(TAG, "setTop() called with: taskInfo = $taskInfo, needAdd = $needAdd, isTop = $isTop")
         dockAppAdapter?.notifyDataSetChangedWapper()
         updateNaviWidth(tasks.size)
+        updateTaskPreviewAfterDataChange()
     }
 
     override fun notifyDockAapp(list: MutableList<TaskInfo>) {
@@ -335,6 +364,150 @@ constructor(
         dockAppAdapter?.setData(tasks)
         dockAppAdapter?.notifyDataSetChangedWapper()
         updateNaviWidth(tasks.size)
+        updateTaskPreviewAfterDataChange()
+    }
+
+    /**
+     * dock 图标 hover 回调。运行中的任务在短暂延迟后弹出缩略图预览，
+     * 移出图标后延迟消失，方便鼠标移动到预览窗口上。
+     */
+    fun onDockItemHover(taskInfo: TaskInfo, anchor: View, hovered: Boolean) {
+        Log.d(
+            TAG,
+            "onDockItemHover hovered=$hovered app=${taskInfo.program} id=${taskInfo.id}" +
+                    " state=${taskInfo.getState()} canShow=${canShowTaskPreview(taskInfo)}"
+        )
+        if (!hovered) {
+            // 注意：ViewGroup 会先派发新目标的 ENTER，再派发旧目标的 EXIT。
+            // 这里只能收起/取消"属于这个任务"的预览，否则会把刚排上的新任务弹出取消掉。
+            if (pendingPreviewTaskInfo === taskInfo) {
+                previewHandler.removeCallbacks(showPreviewRunnable)
+                pendingPreviewTaskInfo = null
+            }
+            if (previewTaskInfo === taskInfo) {
+                previewHandler.removeCallbacks(hidePreviewRunnable)
+                previewHandler.postDelayed(hidePreviewRunnable, PREVIEW_HIDE_DELAY)
+            }
+            return
+        }
+        if (!canShowTaskPreview(taskInfo)) {
+            return
+        }
+        previewHandler.removeCallbacks(hidePreviewRunnable)
+        if (taskPreviewWindow?.isShowing() == true && previewTaskInfo === taskInfo) {
+            return
+        }
+        pendingPreviewTaskInfo = taskInfo
+        pendingPreviewAnchor = anchor
+        previewHandler.removeCallbacks(showPreviewRunnable)
+        previewHandler.postDelayed(showPreviewRunnable, PREVIEW_SHOW_DELAY)
+    }
+
+    private fun canShowTaskPreview(taskInfo: TaskInfo): Boolean {
+        return taskInfo.id != TaskInfo.ID_UNDEFINED &&
+                taskInfo.getState() >= TaskInfo.STATE_RUNNING &&
+                !ACTION_DOCK_OVERVIEW.equals(taskInfo.action)
+    }
+
+    private fun showTaskPreview(taskInfo: TaskInfo, anchor: View) {
+        if (!anchor.isAttachedToWindow) {
+            Log.w(TAG, "showTaskPreview anchor detached, skip")
+            return
+        }
+        dismissTaskPreviewImmediately()
+        val location = IntArray(2)
+        anchor.getLocationOnScreen(location)
+        val previewWidth = resources.getDimensionPixelSize(R.dimen.task_preview_width)
+        val screenWidth = ScreenSizeUtils.getInstance(context).screenWidth
+        val screenHeight = ScreenSizeUtils.getInstance(context).screenHeight
+        var x = location[0] + anchor.width / 2 - previewWidth / 2
+        val maxX = screenWidth - previewWidth - PREVIEW_EDGE_MARGIN
+        x = x.coerceIn(PREVIEW_EDGE_MARGIN, maxX.coerceAtLeast(PREVIEW_EDGE_MARGIN))
+        // Gravity.BOTTOM 的 y 是相对窗口可用区域底边的偏移。taskbar 是导航栏，
+        // 其他窗口的可用区域底边在 taskbar 顶部，而不是屏幕底部。
+        val rootLocation = IntArray(2)
+        anchor.rootView.getLocationOnScreen(rootLocation)
+        val rootBottom = rootLocation[1] + anchor.rootView.height
+        val frameBottom = if (rootBottom >= screenHeight - 2) rootLocation[1] else screenHeight
+        val gap = Utils.dpToPx(context, PREVIEW_BOTTOM_GAP)
+        val bottomOffset = (frameBottom - (location[1] - gap)).coerceAtLeast(0)
+        Log.d(
+            TAG,
+            "showTaskPreview app=${taskInfo.program} id=${taskInfo.id}" +
+                    " anchor=${location[0]},${location[1]} ${anchor.width}x${anchor.height}" +
+                    " screen=${screenWidth}x$screenHeight rootTop=${rootLocation[1]}" +
+                    " frameBottom=$frameBottom x=$x bottom=$bottomOffset"
+        )
+
+        val window = TaskPreviewWindow(
+            context,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.WRAP_CONTENT,
+            Gravity.BOTTOM or Gravity.LEFT,
+            R.layout.layout_task_preview,
+            WindowManager.LayoutParams.TYPE_SYSTEM_DIALOG
+        )
+        window.taskInfo = taskInfo
+        window.offsetX = x
+        window.offsetY = bottomOffset
+        window.elevation = Utils.dpToPx(context, 8)
+        window.onPreviewClickListener = { info ->
+            dismissTaskPreview()
+            onItemClick(resources.getString(R.string.show), info)
+        }
+        window.onCloseClickListener = { info ->
+            dismissTaskPreview()
+            closeRunningTask(info)
+        }
+        window.onHoverChangeListener = { hovered ->
+            Log.d(TAG, "preview hover=$hovered")
+            previewHandler.removeCallbacks(hidePreviewRunnable)
+            if (!hovered && taskPreviewWindow?.isShowing() == true) {
+                previewHandler.postDelayed(hidePreviewRunnable, PREVIEW_HIDE_DELAY)
+            }
+        }
+        try {
+            window.showPopupWindow()
+            taskPreviewWindow = window
+            previewTaskInfo = taskInfo
+            Log.d(
+                TAG,
+                "showTaskPreview shown=${window.isShowing()}" +
+                        " contentAttached=${window.getContentView()?.isAttachedToWindow}"
+            )
+        } catch (t: Throwable) {
+            Log.e(TAG, "showTaskPreview failed", t)
+        }
+    }
+
+    fun dismissTaskPreview() {
+        Log.d(TAG, "dismissTaskPreview preview=${previewTaskInfo?.program} pending=${pendingPreviewTaskInfo?.program}")
+        previewHandler.removeCallbacks(showPreviewRunnable)
+        previewHandler.removeCallbacks(hidePreviewRunnable)
+        taskPreviewWindow?.hide(true)
+        taskPreviewWindow = null
+        previewTaskInfo = null
+        pendingPreviewTaskInfo = null
+        pendingPreviewAnchor = null
+    }
+
+    private fun dismissTaskPreviewImmediately() {
+        taskPreviewWindow?.dismissImmediately()
+        taskPreviewWindow = null
+        previewTaskInfo = null
+    }
+
+    private fun closeRunningTask(taskInfo: TaskInfo) {
+        if (!HostActivityManager.removeTask(taskInfo.id)) {
+            activityManager.moveTaskToBack(false, taskInfo.id)
+        }
+    }
+
+    private fun updateTaskPreviewAfterDataChange() {
+        val previewed = previewTaskInfo ?: return
+        if (!tasks.any { it.id == previewed.id }) {
+            dismissTaskPreview()
+        }
     }
 
 
@@ -608,6 +781,7 @@ constructor(
 
     fun onDestroy() {
         Log.d(TAG, "$this onDestroy() $globalSearchRecevier")
+        dismissTaskPreview()
         appOverviewWindow?.dismiss()
         globalSearchRecevier?.also { receiver ->
             context.unregisterReceiver(receiver)

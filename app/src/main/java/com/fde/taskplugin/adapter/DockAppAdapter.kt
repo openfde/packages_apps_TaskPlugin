@@ -9,6 +9,7 @@ import android.text.TextUtils
 import android.util.Log
 import android.view.Gravity
 import android.view.LayoutInflater
+import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
@@ -147,9 +148,14 @@ class DockAppAdapter(private val context: Context) :
         }
         holder.x11Iv.visibility = if(app.platformType == PLATFORM_TYPE_X11) View.VISIBLE else View.GONE
 
-        holder.appll.tooltipText = app.program
+        if(app.id == 0){
+            holder.appll.tooltipText = app.program
+        } else {
+            holder.appll.tooltipText = null
+        }
         holder.appll.setOnClickListener{
             contextWindow?.dismiss()
+            dockAppLayout?.dismissTaskPreview()
             if(app.id == 0){
                 listener?.onItemClick(context.resources.getString(R.string.open), app)
             }else if(!isShowing(app.id)){
@@ -163,6 +169,7 @@ class DockAppAdapter(private val context: Context) :
             Log.d(TAG, "iconIV click ${holder.iconIV}")
             animating = true
             contextWindow?.dismiss()
+            dockAppLayout?.dismissTaskPreview()
             if(app.id == 0){
                 listener?.onItemClick(context.resources.getString(R.string.open), app)
             }else if(!isShowing(app.id)){
@@ -175,7 +182,38 @@ class DockAppAdapter(private val context: Context) :
                 animating = false
             })
         }
+//        holder.appll.setOnHoverListener { v, event ->
+//            Log.d(TAG, "appll hover : _ = $v, event = $event")
+//            when (event.action) {
+//                MotionEvent.ACTION_HOVER_ENTER ->
+//                    dockAppLayout?.onDockItemHover(app, holder.appll, true)
+//                MotionEvent.ACTION_HOVER_EXIT ->
+//                    dockAppLayout?.onDockItemHover(app, holder.appll, false)
+//            }
+//            false
+//        }
+        // DockIconView is clickable, so View.onHoverEvent() consumes hover events and they never
+        // bubble up to appll. Attach the same listener to the icon as well.
+        holder.iconIV.setOnHoverListener { v, event ->
+            Log.d(TAG, "iconIV hover : _ = $v, event = $event")
+            if (event.action == MotionEvent.ACTION_HOVER_ENTER
+                || event.action == MotionEvent.ACTION_HOVER_EXIT) {
+                Log.d(
+                    TAG,
+                    "icon hover action=${event.action} app=${app.program} id=${app.id}" +
+                            " state=${app.getState()}"
+                )
+            }
+            when (event.action) {
+                MotionEvent.ACTION_HOVER_ENTER ->
+                    dockAppLayout?.onDockItemHover(app, holder.appll, true)
+                MotionEvent.ACTION_HOVER_EXIT ->
+                    dockAppLayout?.onDockItemHover(app, holder.appll, false)
+            }
+            false
+        }
         holder.appll.setOnContextClickListener { v->
+            dockAppLayout?.dismissTaskPreview()
             if(!ACTION_DOCK_OVERVIEW.equals(app.action)) {
 //                makeAndFillContextWindow(app, v)
             }

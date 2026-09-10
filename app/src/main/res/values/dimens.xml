@@ -156,6 +156,13 @@
     <dimen name="dock_status_width">8dp</dimen>
     <dimen name="dock_context_divider_height">6dp</dimen>
     <dimen name="dock_divide_padding">8dp</dimen>
+    <dimen name="task_preview_width">300dp</dimen>
+    <dimen name="task_preview_padding">8dp</dimen>
+    <dimen name="task_preview_header_height">28dp</dimen>
+    <dimen name="task_preview_icon_size">20dp</dimen>
+    <dimen name="task_preview_close_size">24dp</dimen>
+    <dimen name="task_preview_thumb_min_height">120dp</dimen>
+    <dimen name="task_preview_placeholder_size">48dp</dimen>
     <dimen name="overview_app_height">190dp</dimen>
     <dimen name="overview_app_width">188dp</dimen>
     <dimen name="overview_row_spacing_min">1dp</dimen>

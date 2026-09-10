@@ -159,6 +159,9 @@ open class AbsTopPopWindow(
         dismissListener?.onWindowDismiss()
     }
 
+    /** 子类可以追加 Window flag，例如预览窗口使用 FLAG_NOT_FOCUSABLE 避免抢焦点。 */
+    protected open fun extraWindowFlags(): Int = 0
+
     private fun generateLayoutParams(context: Context, windowManager: WindowManager): WindowManager.LayoutParams {
         return WindowManager.LayoutParams(
             width,
@@ -166,7 +169,8 @@ open class AbsTopPopWindow(
             typeParam,
             WindowManager.LayoutParams.FLAG_HARDWARE_ACCELERATED or
                     WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH or
-                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                    WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                    extraWindowFlags(),
             PixelFormat.RGBA_8888
         ).apply {
             this.gravity = winGravity
