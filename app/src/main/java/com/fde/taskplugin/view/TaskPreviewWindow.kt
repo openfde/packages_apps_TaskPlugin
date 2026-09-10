@@ -44,6 +44,7 @@ class TaskPreviewWindow(
     private var loadingPb: ProgressBar? = null
     private var placeholderIv: ImageView? = null
     private var loadToken = 0
+    private var liveActive = false
 
     // 不抢焦点，避免 hover 预览把当前应用焦点顶掉
     override fun extraWindowFlags(): Int = WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
@@ -54,6 +55,7 @@ class TaskPreviewWindow(
         Log.d(TAG, "showPopupWindow content=${mContentView} attached=${mContentView?.isAttachedToWindow}")
         initViews()
         loadThumbnail()
+        startLivePreview()
     }
 
     private fun initViews() {
@@ -110,6 +112,35 @@ class TaskPreviewWindow(
         }
     }
 
+    /**
+     * 对可见任务（TOP）启动低频快照轮询，拿到接近实时的画面。
+     * 后台任务系统不允许截取，轮询会自动结束，保留静态首帧。
+     */
+    private fun startLivePreview() {
+        val info = taskInfo ?: return
+        if (!info.isTop()) {
+            Log.d(TAG, "startLivePreview skip, state=${info.getState()} not TOP")
+            return
+        }
+        liveActive = true
+        Log.d(TAG, "startLivePreview id=${info.id} app=${info.program}")
+        TaskThumbnailLoader.startLive(getContext(), info.id) { frame ->
+            if (!liveActive || !isShowing()) {
+                return@startLive
+            }
+            showThumbnail(frame.bitmap)
+        }
+    }
+
+    private fun stopLivePreview() {
+        if (!liveActive) {
+            return
+        }
+        liveActive = false
+        TaskThumbnailLoader.stopLive()
+        Log.d(TAG, "stopLivePreview")
+    }
+
     private fun showThumbnail(bitmap: Bitmap) {
         val thumb = thumbIv ?: return
         val content = mContentView ?: return
@@ -149,6 +180,7 @@ class TaskPreviewWindow(
     }
 
     fun hide(animated: Boolean) {
+        stopLivePreview()
         if (!animated) {
             dismissImmediately()
             return
@@ -162,5 +194,10 @@ class TaskPreviewWindow(
             .setDuration(FADE_OUT_DURATION)
             .withEndAction { dismissImmediately() }
             .start()
+    }
+
+    override fun dismissImmediately() {
+        stopLivePreview()
+        super.dismissImmediately()
     }
 }

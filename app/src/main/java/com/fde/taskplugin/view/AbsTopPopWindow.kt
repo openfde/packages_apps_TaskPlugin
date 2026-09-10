@@ -152,7 +152,7 @@ open class AbsTopPopWindow(
         }
     }
 
-    fun dismissImmediately() {
+    open fun dismissImmediately() {
         shown = false
         windowGravity = null
         removeViews()
