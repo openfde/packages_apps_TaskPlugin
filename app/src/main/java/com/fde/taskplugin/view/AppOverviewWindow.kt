@@ -1,6 +1,7 @@
 package com.fde.taskplugin.view
 
 import android.animation.Animator
+import android.animation.AnimatorSet
 import android.animation.ObjectAnimator
 import android.animation.ValueAnimator
 import android.app.WallpaperManager
@@ -23,8 +24,8 @@ import android.view.ViewGroup
 import android.view.ViewGroup.LayoutParams
 import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
-import android.view.animation.AnimationUtils
 import android.view.animation.LinearInterpolator
+import android.view.animation.PathInterpolator
 import android.widget.EditText
 import android.widget.ImageView
 import android.widget.LinearLayout
@@ -60,6 +61,10 @@ class AppOverviewWindow(
     var contextWindow: AbsTopPopWindow ?= null
     var focusView: View ?= null
     private var dismissing = false
+    private var contentAnimator: AnimatorSet? = null
+    // Material Motion emphasized easing, matching the launcher popup animations.
+    private val emphasizedDecelerate = PathInterpolator(0.05f, 0.7f, 0.1f, 1f)
+    private val emphasizedAccelerate = PathInterpolator(0.3f, 0f, 0.8f, 0.15f)
     private val apps: MutableList<AppData> = ArrayList()
     private var appPages: MutableList<MutableList<AppData>> = ArrayList()
     var wallpaperView: ImageView ?= null
@@ -96,6 +101,16 @@ class AppOverviewWindow(
         const val MAX_RUNNING_TASKS  = 50
         const val MAX_TASKS_ONE_PAGE  = 28
         const val OVERVIEW_BG_RADIUS = 120
+
+        // Enter: converge inward (scale down from the edges) + fade in.
+        // Exit: expand outward + fade out.
+        private const val ENTER_START_SCALE = 1.1f
+        private const val EXIT_END_SCALE = 1.1f
+        private const val ENTER_SCALE_DURATION = 220L
+        private const val ENTER_FADE_DURATION = 120L
+        private const val EXIT_SCALE_DURATION = 200L
+        private const val EXIT_FADE_DURATION = 100L
+        private const val EXIT_FADE_START_DELAY = 80L
     }
 
     override fun showPopupWindow() {
@@ -104,14 +119,8 @@ class AppOverviewWindow(
         Utils.notifyOverlayVisible(getContext(), true)
         ImageUtils.set("fde.click_as_touch", "true")
         initViews()
-//        runFadeAnimationWithTransition(true, null, null)
-        appsVp?.doOnLayout {
-            val anim = AnimationUtils.loadAnimation(getContext(), R.anim.lp_enter)
-            appsVp?.startAnimation(anim)
-//            runFadeAnimationSet(true, null, null)
-        }
+        playEnterAnimation()
         blurWallPaper(1.0f * OVERVIEW_BG_RADIUS)
-
     }
 
     private fun initViews() {
@@ -321,8 +330,85 @@ class AppOverviewWindow(
     }
 
     override fun dismiss() {
-        destroy()
+        if (dismissing) {
+            return
+        }
+        dismissing = true
         ImageUtils.set("fde.click_as_touch", "false")
+        // Let the launcher state animate back together with the window exit animation.
+        Utils.notifyOverlayVisible(getContext(), false)
+        playExitAnimation()
+    }
+
+    /**
+     * Enter animation: the whole window converges inward (starts slightly larger) while fading in.
+     */
+    private fun playEnterAnimation() {
+        val content = getContentView() ?: return
+        contentAnimator?.cancel()
+        content.scaleX = ENTER_START_SCALE
+        content.scaleY = ENTER_START_SCALE
+        content.alpha = 0f
+        content.doOnLayout {
+            if (dismissing || getContentView() !== content) {
+                return@doOnLayout
+            }
+            content.pivotX = content.width / 2f
+            content.pivotY = content.height / 2f
+            val scaleX = ObjectAnimator.ofFloat(content, View.SCALE_X, ENTER_START_SCALE, 1f)
+            val scaleY = ObjectAnimator.ofFloat(content, View.SCALE_Y, ENTER_START_SCALE, 1f)
+            val alpha = ObjectAnimator.ofFloat(content, View.ALPHA, 0f, 1f)
+            scaleX.duration = ENTER_SCALE_DURATION
+            scaleY.duration = ENTER_SCALE_DURATION
+            scaleX.interpolator = emphasizedDecelerate
+            scaleY.interpolator = emphasizedDecelerate
+            alpha.duration = ENTER_FADE_DURATION
+            alpha.interpolator = LinearInterpolator()
+            val anim = AnimatorSet()
+            anim.playTogether(scaleX, scaleY, alpha)
+            contentAnimator = anim
+            anim.start()
+        }
+    }
+
+    /**
+     * Exit animation: the whole window expands outward while fading out, then the view is removed.
+     */
+    private fun playExitAnimation() {
+        val content = getContentView()
+        if (content == null || !content.isAttachedToWindow) {
+            destroy()
+            return
+        }
+        contentAnimator?.cancel()
+        content.pivotX = content.width / 2f
+        content.pivotY = content.height / 2f
+        val scaleX = ObjectAnimator.ofFloat(content, View.SCALE_X, content.scaleX, EXIT_END_SCALE)
+        val scaleY = ObjectAnimator.ofFloat(content, View.SCALE_Y, content.scaleY, EXIT_END_SCALE)
+        val alpha = ObjectAnimator.ofFloat(content, View.ALPHA, content.alpha, 0f)
+        scaleX.duration = EXIT_SCALE_DURATION
+        scaleY.duration = EXIT_SCALE_DURATION
+        scaleX.interpolator = emphasizedAccelerate
+        scaleY.interpolator = emphasizedAccelerate
+        alpha.duration = EXIT_FADE_DURATION
+        alpha.interpolator = LinearInterpolator()
+        alpha.startDelay = EXIT_FADE_START_DELAY
+        val anim = AnimatorSet()
+        anim.playTogether(scaleX, scaleY, alpha)
+        anim.addListener(object : Animator.AnimatorListener {
+            override fun onAnimationStart(animation: Animator) {}
+            override fun onAnimationEnd(animation: Animator) {
+                // Skip if the dismissal was interrupted by a new show.
+                if (dismissing) {
+                    destroy()
+                }
+            }
+
+            override fun onAnimationCancel(animation: Animator) {}
+            override fun onAnimationRepeat(animation: Animator) {}
+        })
+        contentAnimator = anim
+        anim.start()
     }
 
     fun destroy(){
