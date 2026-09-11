@@ -3,6 +3,8 @@ package com.fde.taskplugin.provider
 import android.app.Activity
 import android.app.ActivityManager
 import android.app.ActivityManager.RunningTaskInfo
+import android.app.ActivityTaskManager
+import android.app.TaskStackListener
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
@@ -10,6 +12,8 @@ import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.graphics.drawable.BitmapDrawable
 import android.net.Uri
+import android.os.Handler
+import android.os.Looper
 import android.os.UserManager
 import android.text.TextUtils
 import android.util.Log
@@ -37,6 +41,8 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
     val packageManager: PackageManager
     val activityManager: ActivityManager
     private val appstateListener: AppStateListener
+    private val taskFocusListener: TaskStackListener
+    private val mainHandler: Handler = Handler(Looper.getMainLooper())
     private val launchApps: LauncherApps
     private val userManager: UserManager
     val persistDockApps: MutableList<TaskInfo> = ArrayList()
@@ -59,6 +65,20 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
         launchApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
         appstateListener = AppStateListener(updater)
+        // Android 17: desktop mode keeps multiple tasks RESUMED, so onTaskStackChanged may not
+        // fire when focus switches between visible windows. onTaskFocusChanged is the reliable
+        // signal for updating the dock selection.
+        taskFocusListener = object : TaskStackListener() {
+            override fun onTaskFocusChanged(taskId: Int, focused: Boolean) {
+                Log.d(TAG, "onTaskFocusChanged taskId=$taskId focused=$focused")
+                mainHandler.post { appstateListener.updateDockAppLocked() }
+            }
+
+            override fun onTaskMovedToBack(taskInfo: RunningTaskInfo?) {
+                Log.d(TAG, "onTaskMovedToBack taskId=${taskInfo?.taskId}")
+                mainHandler.post { appstateListener.updateDockAppLocked() }
+            }
+        }
     }
 
     fun providePersistApps() : MutableList<TaskInfo>{
@@ -373,11 +393,13 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
 
     fun registerTaskStackListener(){
         TC_WRAPPER.registerTaskStackListener(appstateListener)
-        appstateListener.updateDockAppLocked(false)
+        ActivityTaskManager.getInstance().registerTaskStackListener(taskFocusListener)
+        appstateListener.updateDockAppLocked()
     }
 
     fun unregisterTaskStackListener(){
         TC_WRAPPER.unregisterTaskStackListener(appstateListener)
+        ActivityTaskManager.getInstance().unregisterTaskStackListener(taskFocusListener)
     }
 
     fun getPersistSize(): Int {
@@ -481,7 +503,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         private val TAG: String = "AppStateListener"
 
         init {
-            updateDockAppLocked(false)
+            updateDockAppLocked()
         }
 
         override fun onTaskCreated(
@@ -490,43 +512,33 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         ) {
             super.onTaskCreated(taskId, componentName)
             logByTaskid("onTaskCreated", taskId)
-            updateDockAppLocked(false)
+            updateDockAppLocked()
         }
 
         override fun onTaskMovedToFront(taskId: Int) {
             super.onTaskMovedToFront(taskId)
             logByTaskid("onTaskMovedToFront", taskId)
-            updateDockAppLocked(true)
+            updateDockAppLocked()
         }
 
         override fun onTaskMovedToFront(taskInfo: RunningTaskInfo) {
             super.onTaskMovedToFront(taskInfo)
             logByTaskid("onTaskMovedToFront", taskInfo.taskId)
-            topTask(taskInfo)
-            updateDockAppLocked(true)
+            updateDockAppLocked()
         }
 
         override fun onTaskStackChanged() {
             super.onTaskStackChanged()
 //            val info = AM_WRAPPER.getRunningTask(false)
 //            info?.let { topTask(it) }
-            updateDockAppLocked(false)
+            updateDockAppLocked()
         }
 
-        fun updateDockAppLocked(toFront: Boolean) {
-            var launcherFlag = false
-            var isTop = true
+        fun updateDockAppLocked() {
             activityManager.getRunningTasks(MAX_RUNNING_TASKS)?.forEach {
                 val packageName = getRunningTaskInfoPackageName(it)
                 if (packageName != null) {
-                    if(isLauncher(context, it.topActivity)){
-                        launcherFlag = true
-                    }
-                    val realTop = (!launcherFlag || toFront) && isTop
-                    if(realTop){
-                        isTop = false
-                    }
-                    topTask(it, realTop)
+                    topTask(it, it.isFocused)
                 }
             }
         }
