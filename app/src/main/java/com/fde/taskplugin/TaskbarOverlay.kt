@@ -17,6 +17,7 @@ import androidx.core.view.postDelayed
 import com.android.systemui.plugins.TaskbarPlugin
 import com.android.systemui.plugins.annotations.Requires
 import com.fde.taskplugin.provider.AllAppsProvider
+import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.SPUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.utils.ViewTreePrinter
@@ -48,6 +49,9 @@ class TaskbarOverlay : TaskbarPlugin {
         this.hostContext = hostContext
         SPUtils.pluginContext = hostContext
         GlobalSystemUIContext.setContext(hostContext)
+        // 必须用宿主 launcher 的 application context：SystemUiProxy 单例依赖
+        // LauncherApplication.appComponent，插件自己的 context 没有 application。
+        HostDesktopMode.init(hostContext)
         loadCustomViewsWithInflater(pluginContext!!)
 
         dockAppsGroup = initializeDockAppsGroup(this.pluginContext, dockAppsGroup)

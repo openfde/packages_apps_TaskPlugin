@@ -45,6 +45,7 @@ import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVI
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.HostActivityManager
+import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.ScreenSizeUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
@@ -658,10 +659,21 @@ constructor(
                 }
             }
             resources.getString(R.string.show) ->{
-                activityManager.moveTaskToFront(taskInfo.id, ActivityManager.MOVE_TASK_NO_USER_ACTION)
+                // Android 17: 恢复桌面任务必须走 Shell 的 showDesktopApp，
+                // 否则 MinimizedDesk 里的任务用 moveTaskToFront 无法反最小化。
+                if (!HostDesktopMode.showTask(taskInfo.id)) {
+                    activityManager.moveTaskToFront(
+                        taskInfo.id,
+                        ActivityManager.MOVE_TASK_NO_USER_ACTION
+                    )
+                }
             }
             resources.getString(R.string.minimize) ->{
-                activityManager.moveTaskToBack(true, taskInfo.id)
+                Log.d(TAG, "onItemClick() called with: action = $action, taskInfo = $taskInfo")
+                // 与标题栏最小化一致：reparent 到 MinimizedDesk + 最小化动画
+                if (!HostDesktopMode.minimizeTask(taskInfo.id)) {
+                    activityManager.moveTaskToBack(true, taskInfo.id)
+                }
             }
             resources.getString(R.string.pin) ->{
                 dockProvider.pin(taskInfo)
