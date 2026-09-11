@@ -36,14 +36,17 @@ import androidx.recyclerview.widget.RecyclerView
 import com.fde.taskplugin.GlobalSystemUIContext
 import com.fde.taskplugin.R
 import com.fde.taskplugin.TaskInfo
+import com.fde.taskplugin.TaskInfo.Companion.DOCK_TYPE_TRASH
 import com.fde.taskplugin.adapter.DockAppAdapter
 import com.fde.taskplugin.data.AppData
 import com.fde.taskplugin.data.DockContext
 import com.fde.taskplugin.provider.AllAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.AppUtils
+import com.fde.taskplugin.utils.DocumentsUiHelper
 import com.fde.taskplugin.utils.HostActivityManager
 import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.ScreenSizeUtils
@@ -75,6 +78,7 @@ constructor(
     private val userManager: UserManager
     private val windowManager:WindowManager
     private val tasks: MutableList<TaskInfo> = ArrayList()
+    private var trashTask: TaskInfo? = null
     val overviewApps: MutableList<AppData> = java.util.concurrent.CopyOnWriteArrayList()
     private val dockAppAdapter: DockAppAdapter?
     private val dockProvider: DockAppsProvider
@@ -288,6 +292,7 @@ constructor(
         dockProvider.mayFillPersistTaskInfo()
         tasks.clear()
         tasks.addAll(dockProvider.persistDockApps)
+        appendTrashTask()
         itemDecoration = DockAppItemDecoration(this)
         addItemDecoration(itemDecoration!!)
         dockAppAdapter?.dockScaleFactor = dockScaleFactor
@@ -347,7 +352,13 @@ constructor(
                 dockAppAdapter?.setTopTaskId(taskInfo)
             }
             if(needAdd){
-                tasks.add(taskInfo)
+                // 回收站固定在最后，新运行的任务插到它前面
+                val trashIndex = tasks.indexOfFirst { isTrashTask(it) }
+                if (trashIndex >= 0) {
+                    tasks.add(trashIndex, taskInfo)
+                } else {
+                    tasks.add(taskInfo)
+                }
             }
             dockAppAdapter!!.setData(tasks)
         }
@@ -360,12 +371,58 @@ constructor(
     override fun notifyDockAapp(list: MutableList<TaskInfo>) {
         tasks.clear()
         tasks.addAll(list)
+        appendTrashTask()
         Log.d(TAG, "notifyDockAapp: ")
 //        tasks.forEach { taskInfo -> Log.d(TAG, "notifyDockAapp each: $taskInfo") }
         dockAppAdapter?.setData(tasks)
         dockAppAdapter?.notifyDataSetChangedWapper()
         updateNaviWidth(tasks.size)
         updateTaskPreviewAfterDataChange()
+    }
+
+    private fun isTrashTask(taskInfo: TaskInfo): Boolean {
+        return ACTION_OPEN_TRASH == taskInfo.action
+    }
+
+    private fun createTrashTask(): TaskInfo {
+        val task = TaskInfo("com.android.documentsui", DocumentsUiHelper.getTrashLabel(context))
+        task.action = ACTION_OPEN_TRASH
+        task.dockType = DOCK_TYPE_TRASH
+        task.icon = context.getDrawable(R.drawable.icon_trash)
+        return task
+    }
+
+    private fun appendTrashTask() {
+        val trash = trashTask ?: createTrashTask().also { trashTask = it }
+        tasks.removeAll { isTrashTask(it) }
+        tasks.add(trash)
+    }
+
+    private fun openTrash() {
+        if (DocumentsUiHelper.openTrash(context)) {
+            return
+        }
+        // 兜底：回收站入口打不开时至少把 DocumentsUI 拉起来
+        launchDocumentsUi()
+    }
+
+    private fun emptyTrash() {
+        if (DocumentsUiHelper.emptyTrash(context)) {
+            return
+        }
+        openTrash()
+    }
+
+    private fun launchDocumentsUi() {
+        try {
+            val intent = context.packageManager.getLaunchIntentForPackage("com.android.documentsui")
+            intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (intent != null) {
+                context.startActivity(intent)
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "launchDocumentsUi failed", t)
+        }
     }
 
     /**
@@ -652,11 +709,16 @@ constructor(
 //                    context.sendBroadcast(Intent(action))
                     showAppsOverview()
 //                    overviewProvider?.provideAppsWithFilterSync(TYPE_ALL, null)
+                }else if(ACTION_OPEN_TRASH.equals(taskInfo.action)){
+                    openTrash()
                 }else if(!TextUtils.isEmpty(taskInfo.packageName) && taskInfo.launchIntent != null){
                     val launchIntent = taskInfo.launchIntent
                     launchIntent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK
                     context.startActivity(launchIntent)
                 }
+            }
+            resources.getString(R.string.empty_trash) ->{
+                emptyTrash()
             }
             resources.getString(R.string.show) ->{
                 // Android 17: 恢复桌面任务必须走 Shell 的 showDesktopApp，

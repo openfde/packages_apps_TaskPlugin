@@ -28,6 +28,7 @@ import com.fde.taskplugin.TaskInfo.Companion.STATE_RUNNING
 import com.fde.taskplugin.TaskInfo.Companion.STATE_TOP
 import com.fde.taskplugin.TaskInfo.Companion.STATE_UNFEFINED
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.MAX_RUNNING_TASKS
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.ImageUtils
@@ -94,7 +95,10 @@ class DockAppAdapter(private val context: Context) :
         val info = app.linuxInfo
         var loadMsg: String? = null
         Glide.with(GlobalSystemUIContext.getContext()!!).clear(holder.iconIV)
-        if(app.program.equals("Apps")){
+        if(ACTION_OPEN_TRASH.equals(app.action)){
+            holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_trash))
+            loadMsg = "load TRASH"
+        } else if(app.program.equals("Apps")){
             holder.iconIV.setImageResource(R.drawable.icon_menu)
             loadMsg = "load ICON_MENU"
         } else if( !app.isLinux()){
@@ -327,14 +331,23 @@ class DockAppAdapter(private val context: Context) :
 
 
     private fun createContextActionList(taskInfo: TaskInfo) : MutableList<DockContext>{
+        val list: MutableList<DockContext> =ArrayList()
+
+        // 回收站固定图标：只有"打开"和"清空"
+        if (ACTION_OPEN_TRASH.equals(taskInfo.action)) {
+            list.add(DockContext(context.resources.getString(R.string.open),
+                TYPE_NAME, context.resources.getString(R.string.open), null, taskInfo))
+            list.add(DockContext(context.resources.getString(R.string.empty_trash),
+                TYPE_NAME, context.resources.getString(R.string.empty_trash), null, taskInfo))
+            return list
+        }
+
         val isOverView = ACTION_DOCK_OVERVIEW.equals(taskInfo.action)
         val showing = isShowing(taskInfo.id)
         val persist = taskInfo.isPersist()
         val running = taskInfo.isRunning()
         val top = taskInfo.isTop()
         val linux = taskInfo.isLinux()
-
-        val list: MutableList<DockContext> =ArrayList()
 
         if(isOverView){
 

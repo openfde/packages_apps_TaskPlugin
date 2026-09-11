@@ -21,7 +21,7 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
             val child = parent.getChildAt(i)
             val childPosition = parent.getChildAdapterPosition(child)
 
-            if (!hasDivider(childPosition)) {
+            if (!hasDivider(childPosition, parent)) {
                 continue
             }
 
@@ -32,12 +32,21 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
         }
     }
 
-    private fun hasDivider(childPosition: Int): Boolean {
-        return (childPosition == classify.classifyPersit() - 1) && classify.classifyActive() != 0
+    private fun hasDivider(childPosition: Int, parent: RecyclerView): Boolean {
+        if (childPosition < 0) {
+            return false
+        }
+        // persist 与 active 之间
+        if ((childPosition == classify.classifyPersit() - 1) && classify.classifyActive() != 0) {
+            return true
+        }
+        // 固定在最右的回收站与前面的图标之间
+        val itemCount = parent.adapter?.itemCount ?: 0
+        return itemCount >= 2 && childPosition == itemCount - 2
     }
 
     fun getDividerBound(position: Int, parent: RecyclerView?, child: View): Rect {
-        val dividerSize: Int = getDividerSize(position)
+        val dividerSize: Int = getDividerSize(position, parent)
         val bounds = Rect(0, 0, 0, 0)
         bounds.left = child.right
         bounds.right = child.right + dividerSize
@@ -46,8 +55,8 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
         return bounds
     }
 
-    private fun getDividerSize(position: Int): Int {
-        if(hasDivider(position)){
+    private fun getDividerSize(position: Int, parent: RecyclerView?): Int {
+        if(parent != null && hasDivider(position, parent)){
             return 10
         } else {
             return 0
@@ -55,7 +64,7 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
     }
 
     fun setItemOffsets(outRect: Rect, position: Int, parent: RecyclerView?) {
-        outRect.right = getDividerSize(position)
+        outRect.right = getDividerSize(position, parent)
     }
 
     override fun getItemOffsets(
@@ -65,7 +74,7 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
         state: RecyclerView.State
     ) {
         val position = parent.getChildAdapterPosition(view)
-        if (!hasDivider(position)) {
+        if (!hasDivider(position, parent)) {
             return
         }
         setItemOffsets(outRect, position, parent)
