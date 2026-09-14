@@ -29,6 +29,7 @@ import com.fde.taskplugin.TaskInfo.Companion.STATE_TOP
 import com.fde.taskplugin.TaskInfo.Companion.STATE_UNFEFINED
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_SHOW_RECENTS
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.MAX_RUNNING_TASKS
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.ImageUtils
@@ -98,6 +99,9 @@ class DockAppAdapter(private val context: Context) :
         if(ACTION_OPEN_TRASH.equals(app.action)){
             holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_trash))
             loadMsg = "load TRASH"
+        } else if(ACTION_SHOW_RECENTS.equals(app.action)){
+            holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_recents))
+            loadMsg = "load RECENTS"
         } else if(app.program.equals("Apps")){
             holder.iconIV.setImageResource(R.drawable.icon_menu)
             loadMsg = "load ICON_MENU"
@@ -218,6 +222,10 @@ class DockAppAdapter(private val context: Context) :
         }
         holder.appll.setOnContextClickListener { v->
             dockAppLayout?.dismissTaskPreview()
+            // 最近任务图标不需要右键菜单
+            if (ACTION_SHOW_RECENTS.equals(app.action)) {
+                return@setOnContextClickListener true
+            }
             if(!ACTION_DOCK_OVERVIEW.equals(app.action)) {
 //                makeAndFillContextWindow(app, v)
             }

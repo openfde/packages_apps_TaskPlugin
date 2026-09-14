@@ -64,11 +64,24 @@ object Utils {
     const val ACTION_OVERLAY_VISIBLE = "com.android.launcher3.action.APP_OVERLAY_VISIBLE"
     const val EXTRA_OVERLAY_VISIBLE = "visible"
 
+    // Broadcast to ask the launcher to toggle the overview (same as the recents key).
+    const val ACTION_SHOW_RECENTS = "com.android.launcher3.action.SHOW_RECENTS"
+
     @JvmStatic fun notifyOverlayVisible(context: Context, visible: Boolean) {
         try {
             val intent = Intent(ACTION_OVERLAY_VISIBLE)
             intent.setPackage("com.android.launcher3")
             intent.putExtra(EXTRA_OVERLAY_VISIBLE, visible)
+            context.sendBroadcast(intent)
+        } catch (e: Exception) {
+            e.printStackTrace()
+        }
+    }
+
+    @JvmStatic fun notifyShowRecents(context: Context) {
+        try {
+            val intent = Intent(ACTION_SHOW_RECENTS)
+            intent.setPackage("com.android.launcher3")
             context.sendBroadcast(intent)
         } catch (e: Exception) {
             e.printStackTrace()

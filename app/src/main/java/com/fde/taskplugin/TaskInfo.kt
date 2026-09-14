@@ -24,6 +24,7 @@ class TaskInfo(val packageName: String,
         const val DOCK_TYPE_PERSISIT = 1
         const val DOCK_TYPE_NORMAL = 2
         const val DOCK_TYPE_TRASH = 3
+        const val DOCK_TYPE_RECENTS = 4
 
         const val PLATFORM_TYPE_ANDROID = 0
         const val PLATFORM_TYPE_X11 = 1

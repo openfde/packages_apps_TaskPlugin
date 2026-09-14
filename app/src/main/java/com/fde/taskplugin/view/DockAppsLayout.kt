@@ -36,6 +36,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.fde.taskplugin.GlobalSystemUIContext
 import com.fde.taskplugin.R
 import com.fde.taskplugin.TaskInfo
+import com.fde.taskplugin.TaskInfo.Companion.DOCK_TYPE_RECENTS
 import com.fde.taskplugin.TaskInfo.Companion.DOCK_TYPE_TRASH
 import com.fde.taskplugin.adapter.DockAppAdapter
 import com.fde.taskplugin.data.AppData
@@ -44,6 +45,7 @@ import com.fde.taskplugin.provider.AllAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_SHOW_RECENTS
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.DocumentsUiHelper
@@ -79,6 +81,7 @@ constructor(
     private val windowManager:WindowManager
     private val tasks: MutableList<TaskInfo> = ArrayList()
     private var trashTask: TaskInfo? = null
+    private var recentsTask: TaskInfo? = null
     val overviewApps: MutableList<AppData> = java.util.concurrent.CopyOnWriteArrayList()
     private val dockAppAdapter: DockAppAdapter?
     private val dockProvider: DockAppsProvider
@@ -292,7 +295,7 @@ constructor(
         dockProvider.mayFillPersistTaskInfo()
         tasks.clear()
         tasks.addAll(dockProvider.persistDockApps)
-        appendTrashTask()
+        appendFixedTasks()
         itemDecoration = DockAppItemDecoration(this)
         addItemDecoration(itemDecoration!!)
         dockAppAdapter?.dockScaleFactor = dockScaleFactor
@@ -352,10 +355,10 @@ constructor(
                 dockAppAdapter?.setTopTaskId(taskInfo)
             }
             if(needAdd){
-                // 回收站固定在最后，新运行的任务插到它前面
-                val trashIndex = tasks.indexOfFirst { isTrashTask(it) }
-                if (trashIndex >= 0) {
-                    tasks.add(trashIndex, taskInfo)
+                // 回收站/最近任务固定在最后，新运行的任务插到它们前面
+                val fixedIndex = tasks.indexOfFirst { isFixedTask(it) }
+                if (fixedIndex >= 0) {
+                    tasks.add(fixedIndex, taskInfo)
                 } else {
                     tasks.add(taskInfo)
                 }
@@ -371,7 +374,7 @@ constructor(
     override fun notifyDockAapp(list: MutableList<TaskInfo>) {
         tasks.clear()
         tasks.addAll(list)
-        appendTrashTask()
+        appendFixedTasks()
         Log.d(TAG, "notifyDockAapp: ")
 //        tasks.forEach { taskInfo -> Log.d(TAG, "notifyDockAapp each: $taskInfo") }
         dockAppAdapter?.setData(tasks)
@@ -384,6 +387,14 @@ constructor(
         return ACTION_OPEN_TRASH == taskInfo.action
     }
 
+    private fun isRecentsTask(taskInfo: TaskInfo): Boolean {
+        return ACTION_SHOW_RECENTS == taskInfo.action
+    }
+
+    private fun isFixedTask(taskInfo: TaskInfo): Boolean {
+        return isTrashTask(taskInfo) || isRecentsTask(taskInfo)
+    }
+
     private fun createTrashTask(): TaskInfo {
         val task = TaskInfo("com.android.documentsui", DocumentsUiHelper.getTrashLabel(context))
         task.action = ACTION_OPEN_TRASH
@@ -392,10 +403,27 @@ constructor(
         return task
     }
 
-    private fun appendTrashTask() {
+    private fun createRecentsTask(): TaskInfo {
+        val task = TaskInfo("com.fde.recents", context.resources.getString(R.string.recents))
+        task.action = ACTION_SHOW_RECENTS
+        task.dockType = DOCK_TYPE_RECENTS
+        task.icon = context.getDrawable(R.drawable.icon_recents)
+        return task
+    }
+
+    /** 固定的两个图标：最近任务、回收站，始终排在最后。 */
+    private fun appendFixedTasks() {
+        val recents = recentsTask ?: createRecentsTask().also { recentsTask = it }
         val trash = trashTask ?: createTrashTask().also { trashTask = it }
-        tasks.removeAll { isTrashTask(it) }
+        tasks.removeAll { isFixedTask(it) }
+        tasks.add(recents)
         tasks.add(trash)
+    }
+
+    private fun showRecents() {
+        // 和最近任务键同一条路径：通知 launcher 走 OverviewCommandHelper 切换 overview
+        Utils.notifyShowRecents(context)
+        Log.d(TAG, "showRecents broadcast sent")
     }
 
     private fun openTrash() {
@@ -711,6 +739,8 @@ constructor(
 //                    overviewProvider?.provideAppsWithFilterSync(TYPE_ALL, null)
                 }else if(ACTION_OPEN_TRASH.equals(taskInfo.action)){
                     openTrash()
+                }else if(ACTION_SHOW_RECENTS.equals(taskInfo.action)){
+                    showRecents()
                 }else if(!TextUtils.isEmpty(taskInfo.packageName) && taskInfo.launchIntent != null){
                     val launchIntent = taskInfo.launchIntent
                     launchIntent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK

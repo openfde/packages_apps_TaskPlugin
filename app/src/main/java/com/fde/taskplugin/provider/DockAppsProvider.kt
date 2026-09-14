@@ -54,6 +54,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         const val PACKAGE_VNC = "com.iiordanov.bVNC"
         const val ACTION_DOCK_OVERVIEW = "com.fde.systemui.SHOW_APP_OVERVIEW"
         const val ACTION_OPEN_TRASH = "com.fde.systemui.OPEN_TRASH"
+        const val ACTION_SHOW_RECENTS = "com.fde.systemui.SHOW_RECENTS"
 
         private val AM_WRAPPER = ActivityManagerWrapper.getInstance()
         private val TC_WRAPPER = TaskStackChangeListeners.getInstance()

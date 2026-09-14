@@ -40,9 +40,9 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
         if ((childPosition == classify.classifyPersit() - 1) && classify.classifyActive() != 0) {
             return true
         }
-        // 固定在最右的回收站与前面的图标之间
+        // 固定在最右的一组（最近任务、回收站）与前面的图标之间
         val itemCount = parent.adapter?.itemCount ?: 0
-        return itemCount >= 2 && childPosition == itemCount - 2
+        return itemCount >= 3 && childPosition == itemCount - 3
     }
 
     fun getDividerBound(position: Int, parent: RecyclerView?, child: View): Rect {

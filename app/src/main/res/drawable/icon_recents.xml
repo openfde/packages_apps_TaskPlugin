@@ -1,0 +1,18 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="48dp"
+    android:height="48dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48">
+    <!-- square background with rounded corners, full bleed -->
+    <path
+        android:fillColor="#78909C"
+        android:pathData="M3,0h42a3,3 0 0 1 3,3v42a3,3 0 0 1 -3,3h-42a3,3 0 0 1 -3,-3v-42a3,3 0 0 1 3,-3z" />
+    <!-- recent task card, left -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M10,10h9a2,2 0 0 1 2,2v24a2,2 0 0 1 -2,2h-9a2,2 0 0 1 -2,-2v-24a2,2 0 0 1 2,-2z" />
+    <!-- recent task card, right -->
+    <path
+        android:fillColor="#FFFFFF"
+        android:pathData="M29,10h9a2,2 0 0 1 2,2v24a2,2 0 0 1 -2,2h-9a2,2 0 0 1 -2,-2v-24a2,2 0 0 1 2,-2z" />
+</vector>
