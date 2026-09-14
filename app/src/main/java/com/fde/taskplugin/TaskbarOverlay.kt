@@ -122,16 +122,16 @@ class TaskbarOverlay : TaskbarPlugin {
         dockAppsLayout?.onDestroy()
         val height = pluginContext!!.resources.getDimension(R.dimen.dock_height).toInt()
 
-        // 不再改窗口根(navi)自身的 layoutParams，窗口由 launcher 管理为全宽 70dp；
-        // dock 以 WRAP_CONTENT 宽度、水平居中放进去即可。
+        // 窗口宽度由 DockAppsLayout.updateNaviWidth 设为 dock 宽度并居中，
+        // 左右空白区域透传给下层应用；dock 以 WRAP_CONTENT 宽度、水平居中放进去。
         val dockParams = FrameLayout.LayoutParams(
             FrameLayout.LayoutParams.WRAP_CONTENT,
             height,
             Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
         )
         navi?.addView(dockAppsGroup, dockParams)
-        dockAppsLayout?.initApps(mDockScaleFactor)
         dockAppsLayout?.navi = navi
+        dockAppsLayout?.initApps(mDockScaleFactor)
         dockAppsGroup?.setOnClickListener{
 //            traverseAndPrint(navi!!, 0)
             navi?.background = null

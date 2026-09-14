@@ -237,7 +237,7 @@ constructor(
     }
 
     fun updateNaviWindowFlags() {
-        val windowRoot = navi?.parent as? View ?: return
+        val windowRoot = navi ?: return
         val params = windowRoot.layoutParams as? WindowManager.LayoutParams ?: return
         params.flags = params.flags and (
             WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL
@@ -598,8 +598,8 @@ constructor(
 
 
     fun updateNaviWidth(count :Int){
-        val parentView = navi?.parent as? View
-        parentView?.let { view ->
+        val windowRoot = navi
+        windowRoot?.let { view ->
             val windowManager = view.context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
             val params = view.layoutParams as? WindowManager.LayoutParams
             if (params != null) {
