@@ -86,16 +86,25 @@ android_library_import {
 // tree used to install.
 // ---------------------------------------------------------------------------
 
+// The Gradle build takes the package from build.gradle (namespace) and AGP 8
+// rejects a package attribute in the source manifest, while the Soong manifest
+// merger requires one. Inject it into a build-time copy of the manifest.
+genrule {
+    name: "fdetaskbar-manifest",
+    srcs: ["app/src/main/AndroidManifest.xml"],
+    out: ["AndroidManifest.xml"],
+    cmd: "sed 's|<manifest |<manifest package=\"com.fde.taskplugin\" |' $(in) > $(out)",
+}
+
 android_app {
     name: "FdeTaskbar",
-    package_name: "com.fde.taskplugin",
 
     srcs: [
         "app/src/main/java/**/*.java",
         "app/src/main/java/**/*.kt",
     ],
 
-    manifest: "app/src/main/AndroidManifest.xml",
+    manifest: ":fdetaskbar-manifest",
     resource_dirs: ["app/src/main/res"],
 
     static_libs: [
