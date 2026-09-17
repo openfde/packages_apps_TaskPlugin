@@ -159,16 +159,16 @@ public class AppListResult implements Serializable {
             @Override
             public String toString() {
                 return "DataBean{" +
-                        "port=" + port +
-                        ", id=" + id +
-                        ", Type='" + Type + '\'' +
+//                        "port=" + port +
+//                        ", id=" + id +
+//                        ", Type='" + Type + '\'' +
                         ", Path='" + Path + '\'' +
-                        ", IconPath='" + IconPath + '\'' +
-                        ", IconType='" + IconType + '\'' +
+//                        ", IconPath='" + IconPath + '\'' +
+//                        ", IconType='" + IconType + '\'' +
                         ", Name='" + Name + '\'' +
-                        ", ZhName='" + ZhName + '\'' +
-                        ", FileName='" + FileName + '\'' +
-                        '}';
+//                        ", ZhName='" + ZhName + '\'' +
+//                        ", FileName='" + FileName + '\'' +
+                        '}' + "\n";
             }
 
             public String getType() {

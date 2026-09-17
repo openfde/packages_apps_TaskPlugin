@@ -38,6 +38,8 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
     private val loaderTarget: WeakReference<Handler?>?
     private val loaderAndroidApps: MutableList<AppData> = ArrayList()
     private val loaderLinuxApps: MutableList<AppData> = ArrayList()
+    private val lock = Any()
+    @Volatile private var loadToken = 0
     private var stopped = false
     private val pageSize = 100
     val allApps: MutableList<AppData> = CopyOnWriteArrayList()
@@ -46,18 +48,26 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
         if (stopped) {
             return
         }
-        allApps.clear()
-        getLinuxApps(false, 1)
+        val token = ++loadToken
+        getLinuxApps(false, 1, token)
         getAndroidAppsSync()
         sendAllApps()
     }
 
     private fun sendAllApps() {
-        allApps.sortWith { appDataOne: AppData, appDataTwo: AppData ->
+        val merged: MutableList<AppData>
+        synchronized(lock) {
+            merged = ArrayList(loaderAndroidApps.size + loaderLinuxApps.size)
+            merged.addAll(loaderAndroidApps)
+            merged.addAll(loaderLinuxApps)
+        }
+        merged.sortWith { appDataOne: AppData, appDataTwo: AppData ->
             appDataOne.name!!.compareTo(
                 appDataTwo.name!!,
             )
         }
+        allApps.clear()
+        allApps.addAll(merged)
         val msg = Message.obtain()
         msg.what = HandlerConstant.H_LOAD_SUCCEED
         msg.obj = allApps
@@ -74,17 +84,20 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
         for (userHandle in userHandles) {
             activityInfoList.addAll(launcherApps.getActivityList(null, userHandle))
         }
-        loaderAndroidApps.clear()
+        val androidApps: MutableList<AppData> = ArrayList()
         for (info in activityInfoList) {
             val appData = convertAppData(info)
-            loaderAndroidApps.add(appData)
+            androidApps.add(appData)
         }
-        loaderAndroidApps.sortWith { appDataOne: AppData, appDataTwo: AppData ->
+        androidApps.sortWith { appDataOne: AppData, appDataTwo: AppData ->
             appDataOne.name!!.compareTo(
                 appDataTwo.name!!,
             )
         }
-        allApps.addAll(loaderAndroidApps)
+        synchronized(lock) {
+            loaderAndroidApps.clear()
+            loaderAndroidApps.addAll(androidApps)
+        }
     }
 
     private fun convertAppData(info: LauncherActivityInfo): AppData{
@@ -114,7 +127,7 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
         return appData
     }
 
-    fun getLinuxApps(forceRefresh: Boolean, page: Int){
+    fun getLinuxApps(forceRefresh: Boolean, page: Int, token: Int){
         QuietOkHttp.get(BASEURL + URL_GETALLAPP)
             .addParams("page", page.toString())
             .addParams("page_size", pageSize.toString())
@@ -128,17 +141,21 @@ class AppLoaderTask(context: Context?, target: Handler?) : Runnable {
 
                 override fun onSuccess(call: Call?, response: AppListResult?) {
                     Log.d(TAG, "onSuccess() called with: call = $call, response = $response")
-                    val data = response?.getData()?.getData()
-                    loaderLinuxApps.clear()
-                    if (data != null) {
-                        for ( info in data){
-                            val appData = convertAppData(info)
-                            loaderLinuxApps.add(appData)
-//                            android.util.Log.d(TAG, "loaderLinuxApps: info = $info")
-                        }
-                        allApps.addAll(loaderLinuxApps)
-                        sendAllApps()
+                    if (stopped || token != loadToken) {
+                        Log.d(TAG, "onSuccess() ignored stale result: token = $token, loadToken = $loadToken")
+                        return
                     }
+                    val data = response?.getData()?.getData() ?: return
+                    val linuxApps: MutableList<AppData> = ArrayList()
+                    for (info in data) {
+                        val appData = convertAppData(info)
+                        linuxApps.add(appData)
+                    }
+                    synchronized(lock) {
+                        loaderLinuxApps.clear()
+                        loaderLinuxApps.addAll(linuxApps)
+                    }
+                    sendAllApps()
                 }
             })
     }
