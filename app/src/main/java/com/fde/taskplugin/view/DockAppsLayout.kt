@@ -138,7 +138,10 @@ constructor(
         launchApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
         userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
         layoutManager = LinearLayoutManager(context, HORIZONTAL, false)
-        setHasFixedSize(true)
+        // dock 宽度随图标数量变化，wrap_content 的背景需要跟着重新测量，
+        // 否则增量刷新时圆角背景宽度会停在旧值。
+        setHasFixedSize(false)
+        itemAnimator = DockItemAnimator()
         dockAppAdapter = DockAppAdapter(context)
         adapter = dockAppAdapter
         windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager

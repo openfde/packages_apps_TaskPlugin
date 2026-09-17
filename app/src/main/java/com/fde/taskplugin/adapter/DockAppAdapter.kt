@@ -18,6 +18,7 @@ import android.widget.ImageView
 import android.widget.TextView
 import androidx.annotation.RequiresApi
 import androidx.core.view.postDelayed
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import androidx.recyclerview.widget.RecyclerView.Adapter
 import com.fde.taskplugin.GlobalSystemUIContext
@@ -58,6 +59,9 @@ class DockAppAdapter(private val context: Context) :
     var listener: DockItemClickListener ?= null
     var dockAppLayout: DockAppsLayout ? = null
     var animating : Boolean ?= null
+    // 上一次已提交给 RecyclerView 的数据快照，用于做增量更新（增删/移动/内容变化）。
+    private var boundApps: MutableList<TaskInfo> = ArrayList()
+    private var boundSignatures: List<String> = ArrayList()
 
     companion object {
         private const val TAG = "DockAppAdapter"
@@ -522,13 +526,54 @@ class DockAppAdapter(private val context: Context) :
 //            val taskPackageName = getRunningTaskInfoPackageName(task)
 //            Log.d(TAG, "notifyDataSetChangedWapper: label:$label taskPackageName:$taskPackageName")
 //        }
-        if(animating == true){
-            dockAppLayout?.post {
+        val layout = dockAppLayout
+        if(animating == true && layout != null){
+            layout.post {
                 notifyDataSetChangedWapper()
             }
         } else {
-            notifyDataSetChanged()
+            dispatchDataDiff()
         }
+    }
+
+    /**
+     * 用 DiffUtil 做增量刷新，只对发生变化的图标派发通知，
+     * 这样 RecyclerView 才能跑新增/移除/位移动画，而不是整列表瞬间重刷。
+     */
+    private fun dispatchDataDiff() {
+        val oldApps = boundApps
+        val oldSignatures = boundSignatures
+        val newApps = ArrayList(apps)
+        val newSignatures = newApps.map { signatureOf(it) }
+        val diff = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = oldApps.size
+
+            override fun getNewListSize(): Int = newApps.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                itemKey(oldApps[oldItemPosition]) == itemKey(newApps[newItemPosition])
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean =
+                oldSignatures[oldItemPosition] == newSignatures[newItemPosition]
+        })
+        boundApps = newApps
+        boundSignatures = newSignatures
+        diff.dispatchUpdatesTo(this)
+    }
+
+    private fun itemKey(taskInfo: TaskInfo): String {
+        return when (taskInfo.action) {
+            ACTION_DOCK_OVERVIEW, ACTION_OPEN_TRASH, ACTION_SHOW_RECENTS -> taskInfo.action!!
+            else -> taskInfo.packageName
+        }
+    }
+
+    private fun signatureOf(taskInfo: TaskInfo): String {
+        // 带上实例标识：同一个 key 换成了新的 TaskInfo 实例时必须重新绑定，
+        // 否则点击回调里捕获的还是旧实例。
+        return "${taskInfo.getState()}|${taskInfo.dockType}|${taskInfo.platformType}" +
+                "|${taskInfo.iconPath}|${taskInfo.program}|${taskInfo.icon?.hashCode()}" +
+                "|$dockScaleFactor|${System.identityHashCode(taskInfo)}"
     }
 
     fun getRunningTaskInfoPackageName(runningTaskInfo: RunningTaskInfo): String? {
@@ -567,6 +612,9 @@ class DockAppAdapter(private val context: Context) :
         val item = apps.removeAt(from)
         apps.add(to, item)
         notifyItemMoved(from, to)
+        // 同步快照，避免后续增量刷新重复派发这次移动
+        boundApps = ArrayList(apps)
+        boundSignatures = apps.map { signatureOf(it) }
     }
 
     fun reloadActivityManager(context: Context?) {
