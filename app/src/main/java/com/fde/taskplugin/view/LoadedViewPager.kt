@@ -93,7 +93,7 @@ constructor(
             MotionEvent.ACTION_UP -> {
                 mIsTouching = false
                 if(mStartX == ev.x && mStartY == ev.y && ev.source == 0x1002){
-                    postDelayed({ overviewWindow?.dismiss() }, 50)
+//                    postDelayed({ overviewWindow?.dismiss() }, 50)
                 }
                 lastInterceptX = -1f
                 lastInterceptY = -1f

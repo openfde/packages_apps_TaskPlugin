@@ -1,8 +1,14 @@
 package com.fde.taskplugin
 
 import android.annotation.SuppressLint
+import android.content.BroadcastReceiver
+import android.content.ContentResolver
 import android.content.Context
+import android.content.Context.RECEIVER_EXPORTED
+import android.content.Intent
+import android.content.IntentFilter
 import android.graphics.Color
+import android.net.ConnectivityManager
 import android.os.Handler
 import android.os.Looper
 import android.util.AttributeSet
@@ -17,6 +23,7 @@ import androidx.core.view.postDelayed
 import com.android.systemui.plugins.TaskbarPlugin
 import com.android.systemui.plugins.annotations.Requires
 import com.fde.taskplugin.provider.AllAppsProvider
+import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.SPUtils
 import com.fde.taskplugin.utils.Utils
@@ -30,7 +37,7 @@ import kotlinx.coroutines.Runnable
  * with a plugin-provided layout.
  */
 @Requires(target = TaskbarPlugin::class, version = TaskbarPlugin.VERSION)
-class TaskbarOverlay : TaskbarPlugin {
+class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
 
     private val TAG: String? = "TaskbarOverlay"
     private var pluginContext: Context? = null
@@ -42,6 +49,8 @@ class TaskbarOverlay : TaskbarPlugin {
     private var mDockScaleFactor = 1.0f
     private val classLoader = TaskbarOverlay::class.java.classLoader
     private var overviewProvider: AllAppsProvider?= null
+    var receiver :BroadcastReceiver?= null
+    var resolver: ContentResolver? = null
 
 
     override fun onCreate(hostContext: Context, pluginContext: Context) {
@@ -62,6 +71,51 @@ class TaskbarOverlay : TaskbarPlugin {
         dockAppsLayout?.overviewProvider = overviewProvider
 
         Utils.getLinuxRootFileName(hostContext!!)
+        registerAll()
+
+    }
+
+    private fun registerAll() {
+        resolver = hostContext!!.contentResolver
+        val filter = IntentFilter()
+        filter.addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
+        hostContext!!.registerReceiver(closeSystemDialogsReceiver, filter, RECEIVER_EXPORTED)
+        registPackageUpdate()
+    }
+
+    private val closeSystemDialogsReceiver: BroadcastReceiver =
+        object : BroadcastReceiver() {
+            override fun onReceive(
+                context: Context,
+                intent: Intent,
+            ) {
+                Log.d(TAG, "onReceive() called with: context = $context, intent = $intent")
+                if (Intent.ACTION_CLOSE_SYSTEM_DIALOGS != intent.action) {
+                    return
+                }
+                if(dockAppsLayout != null){
+                    dockAppsLayout?.dimissWindow()
+                }
+            }
+        }
+
+    private fun registPackageUpdate() {
+        val filter = IntentFilter()
+        filter.addAction(Intent.ACTION_PACKAGE_ADDED)
+        filter.addAction(Intent.ACTION_PACKAGE_REMOVED)
+        filter.addAction(Intent.ACTION_PACKAGE_FULLY_REMOVED)
+        filter.addAction(Intent.ACTION_PACKAGE_REPLACED)
+        filter.addDataScheme("package")
+        receiver = UninstallReceiver(this)
+        pluginContext?.registerReceiver(receiver, filter)
+    }
+
+
+    override fun onUninstall(packageName: String) {
+        dockAppsLayout?.onUninstall(packageName)
+    }
+
+    override fun onInstall(packageName: String?) {
 
     }
 

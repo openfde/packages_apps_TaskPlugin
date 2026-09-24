@@ -236,7 +236,7 @@ constructor(
             val height = context.resources.getDimension(R.dimen.overview_context_height).toInt()
             val location = IntArray(2)
             v.getLocationOnScreen(location)
-            val x = location[0] + 132
+            val x = location[0] + 80
             val y = location[1] + 32
             if(contextWindow == null){
                 contextWindow =  AbsTopPopWindow.Builder(context, WRAP_CONTENT,
