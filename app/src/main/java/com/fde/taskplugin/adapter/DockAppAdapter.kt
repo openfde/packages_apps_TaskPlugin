@@ -207,13 +207,13 @@ class DockAppAdapter(private val context: Context) :
         // DockIconView is clickable, so View.onHoverEvent() consumes hover events and they never
         // bubble up to appll. Attach the same listener to the icon as well.
         holder.iconIV.setOnHoverListener { v, event ->
-            Log.d(TAG, "iconIV hover : _ = $v, event = $event")
             if (event.action == MotionEvent.ACTION_HOVER_ENTER
                 || event.action == MotionEvent.ACTION_HOVER_EXIT) {
                 Log.d(
                     TAG,
-                    "icon hover action=${event.action} app=${app.program} id=${app.id}" +
-                            " state=${app.getState()}"
+                    "icon hover action=${MotionEvent.actionToString(event.action)}" +
+                            " app=${app.program} id=${app.id} state=${app.getState()}" +
+                            " raw=(${event.rawX},${event.rawY})"
                 )
             }
             when (event.action) {
@@ -624,6 +624,11 @@ class DockAppAdapter(private val context: Context) :
 
     fun getTopTaskId(): Int {
         return topTaskId
+    }
+
+    /** dock 右键菜单是否正在显示。右键菜单期间不再弹任务预览。 */
+    fun isContextWindowShowing(): Boolean {
+        return contextWindow?.isShowing() == true
     }
 
 

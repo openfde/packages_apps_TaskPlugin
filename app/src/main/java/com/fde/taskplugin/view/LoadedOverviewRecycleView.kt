@@ -116,6 +116,7 @@ constructor(
         private var appOverviewWindow: AppOverviewWindow? = null
         private val apps: MutableList<AppData?> = ArrayList()
         private var contextWindow :AbsTopPopWindow ?= null
+        private var contextAnchorPackage: String? = null
 
         override fun onCreateViewHolder(
             parent: ViewGroup,
@@ -238,27 +239,49 @@ constructor(
             v.getLocationOnScreen(location)
             val x = location[0] + 80
             val y = location[1] + 32
-            if(contextWindow == null){
-                contextWindow =  AbsTopPopWindow.Builder(context, WRAP_CONTENT,
+
+            val sameAnchor = contextAnchorPackage == appData.packageName
+            val showing = contextWindow?.isShowing() == true &&
+                    contextWindow?.getContentView()?.isAttachedToWindow == true
+            if (sameAnchor) {
+                // 再次右键同一个图标：收起菜单（外部点击可能已经先关掉了它，这里不再重新弹）
+                contextAnchorPackage = null
+                if (showing) {
+                    contextWindow?.dismiss()
+                } else {
+                    contextWindow?.dismissImmediately()
+                    contextWindow = null
+                }
+                return
+            }
+            if (!showing && contextWindow != null) {
+                // 退出动画未结束或窗口已被移除：丢弃重建，避免在残留窗口上“弹出又消失”
+                contextWindow?.dismissImmediately()
+                contextWindow = null
+            }
+            if (contextWindow == null) {
+                val window = AbsTopPopWindow.Builder(context, WRAP_CONTENT,
                     WRAP_CONTENT, R.layout.layout_app_context_overview)
                     .gravity(Gravity.TOP or Gravity.START)
-                    .locate( x , y)
+                    .locate(x, y)
                     .build(AbsTopPopWindow.WindowType.Default)
-                contextWindow?.showPopupWindow()
-                contextWindow?.runWindowAnim(AbsTopPopWindow.WindowGravity.topLeft, true)
-                Utils.setBackgroundBlurRadius(contextWindow?.getContentView()?.findViewById(R.id.root_blur), 40, 8f)
-            } else {
-                if(contextWindow?.isShowing() == true && x == contextWindow?.offsetX
-                    && y == contextWindow?.offsetY){
-                    contextWindow?.dismiss()
-                } else if(contextWindow?.isShowing() != true){
-                    contextWindow?.updateLayoutParams(WRAP_CONTENT, WRAP_CONTENT, x, y,
-                        Gravity.TOP or Gravity.START)
-                    contextWindow?.showPopupWindow()
-                    contextWindow?.runWindowAnim(AbsTopPopWindow.WindowGravity.topLeft, true)
-                    Utils.setBackgroundBlurRadius(contextWindow?.getContentView()?.findViewById(R.id.root_blur), 40, 8f)
+                window.dismissListener = object : AbsTopPopWindow.WindowDismissListener {
+                    override fun onWindowDismiss() {
+                        if (contextWindow === window) {
+                            contextAnchorPackage = null
+                        }
+                    }
                 }
+                contextWindow = window
+                window.showPopupWindow()
+                window.runWindowAnim(AbsTopPopWindow.WindowGravity.topLeft, true)
+                Utils.setBackgroundBlurRadius(window.getContentView()?.findViewById(R.id.root_blur), 40, 8f)
+            } else {
+                // 已显示时右键另一个图标：菜单移到新位置，内容在下面更新
+                contextWindow?.updateLayoutParams(WRAP_CONTENT, WRAP_CONTENT, x, y,
+                    Gravity.TOP or Gravity.START)
             }
+            contextAnchorPackage = appData.packageName
             Log.d(TAG, "makeAndFillContextWindow() called with: width = $width, v = $v")
             val isLinuxApp = appData.linuxInfo != null
             var isSystem = false
@@ -320,7 +343,6 @@ constructor(
                 }
             }
             appOverviewWindow?.contextWindow = contextWindow
-
 
             var list: MutableList<View?> = ArrayList()
 

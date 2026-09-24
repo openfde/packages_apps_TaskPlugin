@@ -115,7 +115,20 @@ constructor(
     private var pendingPreviewTaskInfo: TaskInfo? = null
     private var pendingPreviewAnchor: View? = null
     private val previewHandler = Handler(Looper.getMainLooper())
-    private val hidePreviewRunnable = Runnable { dismissTaskPreview() }
+    private val hidePreviewRunnable = Runnable {
+        val preview = taskPreviewWindow
+        val over = preview?.isPointerOverPreview()
+        Log.d(
+            TAG,
+            "hidePreviewRunnable run: preview=$preview showing=${preview?.isShowing()}" +
+                    " overPreview=$over previewTask=${previewTaskInfo?.program}"
+        )
+        if (preview == null || over != true) {
+            dismissPreviewWindow("hideRunnable")
+        } else {
+            Log.d(TAG, "hidePreviewRunnable keep: pointer still over preview")
+        }
+    }
     private val showPreviewRunnable = Runnable {
         Log.d(TAG, "showPreviewRunnable run pending=${pendingPreviewTaskInfo?.program}")
         val info = pendingPreviewTaskInfo ?: return@Runnable
@@ -254,6 +267,7 @@ constructor(
     override fun onTouchEvent(e: MotionEvent?): Boolean {
         Log.d(TAG, "onTouchEvent() called with: e = $e")
         if(e?.buttonState == MotionEvent.BUTTON_SECONDARY && e.action == MotionEvent.ACTION_DOWN){
+            dismissTaskPreview()
             dockAppAdapter?.makeListContextWindowAt(
                 e.rawX.toInt(),
                 null
@@ -464,28 +478,48 @@ constructor(
         Log.d(
             TAG,
             "onDockItemHover hovered=$hovered app=${taskInfo.program} id=${taskInfo.id}" +
-                    " state=${taskInfo.getState()} canShow=${canShowTaskPreview(taskInfo)}"
+                    " state=${taskInfo.getState()} canShow=${canShowTaskPreview(taskInfo)}" +
+                    " previewTask=${previewTaskInfo?.program}@${previewTaskInfo?.id}" +
+                    " pendingTask=${pendingPreviewTaskInfo?.program}@${pendingPreviewTaskInfo?.id}" +
+                    " windowShowing=${taskPreviewWindow?.isShowing()}" +
+                    " overPreview=${taskPreviewWindow?.isPointerOverPreview()}"
         )
         if (!hovered) {
             // 注意：ViewGroup 会先派发新目标的 ENTER，再派发旧目标的 EXIT。
             // 这里只能收起/取消"属于这个任务"的预览，否则会把刚排上的新任务弹出取消掉。
             if (pendingPreviewTaskInfo === taskInfo) {
+                Log.d(TAG, "onDockItemHover exit: cancel pending show for ${taskInfo.program}")
                 previewHandler.removeCallbacks(showPreviewRunnable)
                 pendingPreviewTaskInfo = null
             }
             if (previewTaskInfo === taskInfo) {
                 previewHandler.removeCallbacks(hidePreviewRunnable)
-                previewHandler.postDelayed(hidePreviewRunnable, PREVIEW_HIDE_DELAY)
+                // 指针可能已经移进预览窗口，此时不要再排隐藏
+                if (taskPreviewWindow?.isPointerOverPreview() != true) {
+                    Log.d(TAG, "onDockItemHover exit: post hide for ${taskInfo.program} in ${PREVIEW_HIDE_DELAY}ms")
+                    previewHandler.postDelayed(hidePreviewRunnable, PREVIEW_HIDE_DELAY)
+                } else {
+                    Log.d(TAG, "onDockItemHover exit: pointer over preview, skip hide")
+                }
             }
             return
         }
         if (!canShowTaskPreview(taskInfo)) {
+            Log.d(TAG, "onDockItemHover enter: cannot show preview for ${taskInfo.program}")
             return
         }
-        previewHandler.removeCallbacks(hidePreviewRunnable)
-        if (taskPreviewWindow?.isShowing() == true && previewTaskInfo === taskInfo) {
+        if (dockAppAdapter?.isContextWindowShowing() == true) {
+            Log.d(TAG, "onDockItemHover enter: context menu showing, skip preview for ${taskInfo.program}")
             return
         }
+        if (previewTaskInfo === taskInfo) {
+            previewHandler.removeCallbacks(hidePreviewRunnable)
+            if (taskPreviewWindow?.isShowing() == true) {
+                Log.d(TAG, "onDockItemHover enter: preview already showing for ${taskInfo.program}")
+                return
+            }
+        }
+        Log.d(TAG, "onDockItemHover enter: post show for ${taskInfo.program} in ${PREVIEW_SHOW_DELAY}ms")
         pendingPreviewTaskInfo = taskInfo
         pendingPreviewAnchor = anchor
         previewHandler.removeCallbacks(showPreviewRunnable)
@@ -499,14 +533,23 @@ constructor(
     }
 
     private fun showTaskPreview(taskInfo: TaskInfo, anchor: View) {
+        if (dockAppAdapter?.isContextWindowShowing() == true) {
+            Log.d(TAG, "showTaskPreview skip: context menu showing")
+            return
+        }
         if (!anchor.isAttachedToWindow) {
             Log.w(TAG, "showTaskPreview anchor detached, skip")
             return
         }
         dismissTaskPreviewImmediately()
+
+        // 同一个包的多个窗口并排展示
+        val windows = dockProvider.getRunningTaskInfosFor(taskInfo.packageName)
+        val previewTasks = buildPreviewTasks(taskInfo, windows)
+
         val location = IntArray(2)
         anchor.getLocationOnScreen(location)
-        val previewWidth = resources.getDimensionPixelSize(R.dimen.task_preview_width)
+        val previewWidth = TaskPreviewWindow.previewWidthPx(context, previewTasks.size)
         val screenWidth = ScreenSizeUtils.getInstance(context).screenWidth
         val screenHeight = ScreenSizeUtils.getInstance(context).screenHeight
         var x = location[0] + anchor.width / 2 - previewWidth / 2
@@ -522,7 +565,7 @@ constructor(
         val bottomOffset = (frameBottom - (location[1] - gap)).coerceAtLeast(0)
         Log.d(
             TAG,
-            "showTaskPreview app=${taskInfo.program} id=${taskInfo.id}" +
+            "showTaskPreview app=${taskInfo.program} id=${taskInfo.id} windows=${previewTasks.size}" +
                     " anchor=${location[0]},${location[1]} ${anchor.width}x${anchor.height}" +
                     " screen=${screenWidth}x$screenHeight rootTop=${rootLocation[1]}" +
                     " frameBottom=$frameBottom x=$x bottom=$bottomOffset"
@@ -530,13 +573,13 @@ constructor(
 
         val window = TaskPreviewWindow(
             context,
-            WindowManager.LayoutParams.WRAP_CONTENT,
+            previewWidth,
             WindowManager.LayoutParams.WRAP_CONTENT,
             Gravity.BOTTOM or Gravity.LEFT,
             R.layout.layout_task_preview,
             WindowManager.LayoutParams.TYPE_SYSTEM_DIALOG
         )
-        window.taskInfo = taskInfo
+        window.setTasks(previewTasks)
         window.offsetX = x
         window.offsetY = bottomOffset
         window.elevation = Utils.dpToPx(context, 8)
@@ -549,10 +592,22 @@ constructor(
             closeRunningTask(info)
         }
         window.onHoverChangeListener = { hovered ->
-            Log.d(TAG, "preview hover=$hovered")
+            Log.d(
+                TAG,
+                "preview hover=$hovered windowShowing=${taskPreviewWindow?.isShowing()}" +
+                        " previewTask=${previewTaskInfo?.program}"
+            )
             previewHandler.removeCallbacks(hidePreviewRunnable)
             if (!hovered && taskPreviewWindow?.isShowing() == true) {
                 previewHandler.postDelayed(hidePreviewRunnable, PREVIEW_HIDE_DELAY)
+            }
+        }
+        window.dismissListener = object : AbsTopPopWindow.WindowDismissListener {
+            override fun onWindowDismiss() {
+                if (taskPreviewWindow === window) {
+                    taskPreviewWindow = null
+                    previewTaskInfo = null
+                }
             }
         }
         try {
@@ -569,18 +624,45 @@ constructor(
         }
     }
 
+    /**
+     * 把 dock 图标对应的运行中窗口转成预览用的 TaskInfo（每个窗口一个，带独立 taskId）。
+     * 拿不到运行窗口时退回 dock 图标自身的 TaskInfo。
+     */
+    private fun buildPreviewTasks(dockTask: TaskInfo, windows: MutableList<ActivityManager.RunningTaskInfo>): MutableList<TaskInfo> {
+        if (windows.isEmpty()) {
+            return mutableListOf(dockTask)
+        }
+        return windows.map { running ->
+            TaskInfo(dockTask.packageName, dockTask.program).apply {
+                id = running.taskId
+                label = running.taskDescription?.label
+                action = dockTask.action
+                platformType = dockTask.platformType
+                icon = dockTask.icon
+                setState(if (running.isFocused) TaskInfo.STATE_TOP else TaskInfo.STATE_RUNNING)
+            }
+        }.toMutableList()
+    }
+
     fun dismissTaskPreview() {
         Log.d(TAG, "dismissTaskPreview preview=${previewTaskInfo?.program} pending=${pendingPreviewTaskInfo?.program}")
         previewHandler.removeCallbacks(showPreviewRunnable)
         previewHandler.removeCallbacks(hidePreviewRunnable)
-        taskPreviewWindow?.hide(true)
-        taskPreviewWindow = null
-        previewTaskInfo = null
+        dismissPreviewWindow("dismissTaskPreview")
         pendingPreviewTaskInfo = null
         pendingPreviewAnchor = null
     }
 
+    /** 只收掉当前预览窗口，不影响已经排队的下一个预览。 */
+    private fun dismissPreviewWindow(reason: String) {
+        Log.d(TAG, "dismissPreviewWindow reason=$reason preview=${previewTaskInfo?.program}@${previewTaskInfo?.id}")
+        taskPreviewWindow?.hide(true)
+        taskPreviewWindow = null
+        previewTaskInfo = null
+    }
+
     private fun dismissTaskPreviewImmediately() {
+        Log.d(TAG, "dismissTaskPreviewImmediately preview=${previewTaskInfo?.program}@${previewTaskInfo?.id}")
         taskPreviewWindow?.dismissImmediately()
         taskPreviewWindow = null
         previewTaskInfo = null
@@ -594,7 +676,9 @@ constructor(
 
     private fun updateTaskPreviewAfterDataChange() {
         val previewed = previewTaskInfo ?: return
-        if (!tasks.any { it.id == previewed.id }) {
+        val dockTask = tasks.firstOrNull { TextUtils.equals(it.packageName, previewed.packageName) }
+        if (dockTask == null || !dockTask.isRunning() ||
+            dockProvider.getRunningTaskInfosFor(previewed.packageName).isEmpty()) {
             dismissTaskPreview()
         }
     }

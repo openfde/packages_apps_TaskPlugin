@@ -168,6 +168,23 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         }
     }
 
+    /** 返回属于同一个 dock 图标（同一个包）的所有运行中窗口，焦点窗口排在前面。 */
+    fun getRunningTaskInfosFor(packageName: String): MutableList<RunningTaskInfo> {
+        val result: MutableList<RunningTaskInfo> = ArrayList()
+        activityManager.getRunningTasks(MAX_RUNNING_TASKS)?.forEach { info ->
+            var pkg = getRunningTaskInfoPackageName(info) ?: return@forEach
+            if (Utils.isX11App(pkg, info.topActivity)) {
+                val label = info.taskDescription?.label ?: return@forEach
+                pkg = "$pkg#$label"
+            }
+            if (TextUtils.equals(pkg, packageName)) {
+                result.add(info)
+            }
+        }
+        result.sortByDescending { it.isFocused }
+        return result
+    }
+
     fun shouldIgnoreTopTask(componentName: ComponentName?): Boolean {
         if (componentName == null) {
             return true
@@ -537,12 +554,11 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         }
 
         fun updateDockAppLocked() {
-            activityManager.getRunningTasks(MAX_RUNNING_TASKS)?.forEach {
-                val packageName = getRunningTaskInfoPackageName(it)
-                if (packageName != null) {
-                    topTask(it, it.isFocused)
-                }
-            }
+            val runningTasks = activityManager.getRunningTasks(MAX_RUNNING_TASKS) ?: return
+            // 同一包可能有多个 task 共用同一个 dock 图标，先处理非焦点窗口、最后处理焦点窗口，
+            // 否则后处理的非焦点窗口会把共享 TaskInfo 的 TOP 状态覆盖成 RUNNING。
+            runningTasks.filter { !it.isFocused }.forEach { topTask(it, false) }
+            runningTasks.filter { it.isFocused }.forEach { topTask(it, true) }
         }
 
         override fun onTaskRemoved(taskId: Int) {

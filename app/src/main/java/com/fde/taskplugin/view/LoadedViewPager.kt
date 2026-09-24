@@ -1,6 +1,7 @@
 package com.fde.taskplugin.view
 
 import android.content.Context
+import android.os.SystemClock
 import android.util.AttributeSet
 import android.util.Log
 import android.view.MotionEvent
@@ -23,6 +24,8 @@ constructor(
     private val mTriggerDistance = DEFAULT_TRIGGER_DISTANCE
     private var mStartX = 0f
     private var mStartY = 0f
+    private var mMenuVisibleOnDown = false
+    private val MENU_DISMISS_GRACE_MS = 300L
     private var mIsHorizontalScroll = false
     val TAG = "LoadedViewPager"
     var blockScroll : Boolean = false
@@ -58,6 +61,12 @@ constructor(
                 mIsTouching = true;
                 mStartX = ev!!.x
                 mStartY = ev!!.y
+                // 按下时记录应用列表的右键菜单是否显示/刚刚被点外面关掉：
+                // 有菜单时本次点击只关菜单，不退出列表
+                val ctx = overviewWindow?.contextWindow
+                mMenuVisibleOnDown = ctx != null && (ctx.isShowing() ||
+                        (ctx.dismissTime > 0 &&
+                                SystemClock.uptimeMillis() - ctx.dismissTime < MENU_DISMISS_GRACE_MS))
                 lastInterceptX = -1f
                 lastInterceptY = -1f
             }
@@ -92,8 +101,8 @@ constructor(
             }
             MotionEvent.ACTION_UP -> {
                 mIsTouching = false
-                if(mStartX == ev.x && mStartY == ev.y && ev.source == 0x1002){
-//                    postDelayed({ overviewWindow?.dismiss() }, 50)
+                if(!mMenuVisibleOnDown && mStartX == ev.x && mStartY == ev.y && ev.source == 0x1002){
+                    postDelayed({ overviewWindow?.dismiss() }, 50)
                 }
                 lastInterceptX = -1f
                 lastInterceptY = -1f

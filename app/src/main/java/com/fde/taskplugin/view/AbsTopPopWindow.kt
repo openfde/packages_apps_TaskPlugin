@@ -13,6 +13,7 @@ import android.graphics.PixelFormat
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.transition.Fade
 import android.transition.Scene
 import android.transition.Transition
@@ -78,6 +79,8 @@ open class AbsTopPopWindow(
     var offsetX = 0
     var offsetY = 0
     var elevation = 0
+    /** 最近一次 dismiss/dismissImmediately 的时间（uptimeMillis），用于判断"刚刚被点外面关掉"。 */
+    var dismissTime = 0L
     private var windowManager: WindowManager? = null
     protected var mContentView: View? = null
     protected var provider: ViewOutlineProvider? = null
@@ -109,6 +112,12 @@ open class AbsTopPopWindow(
                 params!!.fitInsetsTypes = 0
             }
             windowManager?.addView(mContentView, params)
+            Log.d(
+                TAG,
+                "showPopupWindow added: ${mContentView?.javaClass?.simpleName}" +
+                        " x=${params?.x} y=${params?.y} w=${params?.width} h=${params?.height}" +
+                        " gravity=${params?.gravity} flags=${Integer.toHexString(params?.flags ?: 0)}"
+            )
             Log.d(TAG, "showPopupWindow: windowManager:$windowManager")
             mContentView?.setOnTouchListener { _, event ->
                 if (event.action == MotionEvent.ACTION_OUTSIDE) {
@@ -135,7 +144,7 @@ open class AbsTopPopWindow(
     fun removeViews() {
         try {
             windowManager?.removeViewImmediate(mContentView)
-//            Log.d(TAG, "removeViews: ${mContentView?.isAttachedToWindow}")
+            Log.d(TAG, "removeViews done, content=$mContentView")
         } catch (e: IllegalArgumentException) {
             Log.e("popwindow", "Catch exception when remove control window：$e")
         }
@@ -144,6 +153,7 @@ open class AbsTopPopWindow(
 
     open fun dismiss() {
         shown = false
+        dismissTime = SystemClock.uptimeMillis()
         windowGravity?.let { windowGravity ->
             runWindowAnim(windowGravity, false)
         } ?: run {
@@ -154,6 +164,7 @@ open class AbsTopPopWindow(
 
     open fun dismissImmediately() {
         shown = false
+        dismissTime = SystemClock.uptimeMillis()
         windowGravity = null
         removeViews()
         dismissListener?.onWindowDismiss()

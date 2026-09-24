@@ -163,6 +163,8 @@
     <dimen name="task_preview_close_size">24dp</dimen>
     <dimen name="task_preview_thumb_min_height">120dp</dimen>
     <dimen name="task_preview_placeholder_size">48dp</dimen>
+    <dimen name="task_preview_item_width">180dp</dimen>
+    <dimen name="task_preview_item_gap">6dp</dimen>
     <dimen name="overview_app_height">190dp</dimen>
     <dimen name="overview_app_width">188dp</dimen>
     <dimen name="overview_row_spacing_min">1dp</dimen>

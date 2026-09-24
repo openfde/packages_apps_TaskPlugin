@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:id="@+id/task_preview_root"
-    android:layout_width="@dimen/task_preview_width"
+    android:layout_width="match_parent"
     android:layout_height="wrap_content"
     android:orientation="vertical"
     android:background="@drawable/bg_task_preview"
@@ -43,42 +43,12 @@
             />
     </LinearLayout>
 
-    <FrameLayout
-        android:id="@+id/task_preview_thumb_container"
-        android:layout_width="match_parent"
+    <LinearLayout
+        android:id="@+id/task_preview_thumb_row"
+        android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:layout_marginTop="6dp"
-        android:minHeight="@dimen/task_preview_thumb_min_height"
-        android:background="@drawable/bg_task_preview_thumb"
-        android:clipToOutline="true"
-        >
-
-        <ImageView
-            android:id="@+id/task_preview_thumb"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_gravity="center"
-            android:scaleType="fitCenter"
-            android:visibility="gone"
-            />
-
-        <ImageView
-            android:id="@+id/task_preview_placeholder"
-            android:layout_width="@dimen/task_preview_placeholder_size"
-            android:layout_height="@dimen/task_preview_placeholder_size"
-            android:layout_gravity="center"
-            android:visibility="visible"
-            />
-
-        <ProgressBar
-            android:id="@+id/task_preview_loading"
-            style="?android:attr/progressBarStyleSmall"
-            android:layout_width="24dp"
-            android:layout_height="24dp"
-            android:layout_gravity="bottom|center_horizontal"
-            android:layout_marginBottom="8dp"
-            android:visibility="visible"
-            />
-    </FrameLayout>
+        android:orientation="horizontal"
+        />
 
 </LinearLayout>
