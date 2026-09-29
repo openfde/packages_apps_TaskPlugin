@@ -117,6 +117,11 @@ android_app {
         "androidx.appcompat_appcompat",
         "androidx.cardview_cardview",
         "androidx.core_core-ktx",
+        // Glide 4.12.0 references androidx.exifinterface.media.ExifInterface at runtime
+        // (it is a dependency of glide's POM). The glide AAR above is imported by hand, so
+        // this module has to be listed explicitly - without it every Glide image decode
+        // throws NoClassDefFoundError: androidx/exifinterface/media/ExifInterface.
+        "androidx.exifinterface_exifinterface",
         "androidx.fragment_fragment",
         "androidx.preference_preference",
         "androidx.recyclerview_recyclerview",
