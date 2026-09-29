@@ -1,12 +1,14 @@
 package com.fde.taskplugin
 
 import android.annotation.SuppressLint
+import android.animation.ArgbEvaluator
 import android.content.BroadcastReceiver
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Context.RECEIVER_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
+import android.content.res.ColorStateList
 import android.graphics.Color
 import android.net.ConnectivityManager
 import android.os.Handler
@@ -171,6 +173,27 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         updateNaviDock()
     }
 
+    // fde start: 跟随系统 system bar 的深浅色（0 = 背景偏暗，1 = 背景偏亮）。
+    private var navButtonsDarkIntensity = 1f
+
+    override fun onNavButtonsDarkIntensityChanged(darkIntensity: Float) {
+        Log.d(TAG, "onNavButtonsDarkIntensityChanged: darkIntensity = $darkIntensity")
+        navButtonsDarkIntensity = darkIntensity
+        applyDarkIntensity()
+    }
+
+    /** dock 底板颜色随身后内容的明暗变化，0 偏深、1 偏浅。 */
+    private fun dockPlateColor(): Int {
+        val fraction = navButtonsDarkIntensity.coerceIn(0f, 1f)
+        return ArgbEvaluator().evaluate(fraction, 0xAA1F2430.toInt(), 0xAAF2F6FA.toInt()) as Int
+    }
+
+    private fun applyDarkIntensity() {
+        dockAppsGroup?.findViewById<ViewGroup>(R.id.paren_fl)?.backgroundTintList =
+            ColorStateList.valueOf(dockPlateColor())
+    }
+    // fde end
+
     private fun updateNaviDock() {
         navi!!.removeAllViews()
         dockAppsLayout?.onDestroy()
@@ -201,8 +224,9 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             val bgViewGroup = dockAppsGroup?.findViewById<ViewGroup>(R.id.paren_fl)
             bgViewGroup?.setBackgroundResource(R.drawable.round_rect_16dp_no_blur)
             val cardView = dockAppsGroup?.findViewById<CardView>(R.id.root_blur)
-            cardView?.setCardBackgroundColor(Color.parseColor("#aaF2F6FA"))
+            cardView?.setCardBackgroundColor(dockPlateColor())
         }
+        applyDarkIntensity()
     }
 
     @SuppressLint("InflateParams")
