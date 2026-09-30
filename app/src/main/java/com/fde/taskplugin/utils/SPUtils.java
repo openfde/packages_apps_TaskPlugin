@@ -48,13 +48,13 @@ public class SPUtils {
                 "com.android.documentsui," +
                 "com.fde.download," +
                 "org.lineageos.etar," +
-                "com.android.gallery3d," +
+                "com.fde.gallery3d," +
                 "com.fde.taskmanager";
         String apps = shared_dock_app.getString(PERSIST_DOCK_APPS, "com.android.allapp,com.android.settings," +
                 "com.android.documentsui," +
                 "com.fde.download," +
                 "org.lineageos.etar," +
-                "com.android.gallery3d," +
+                "com.fde.gallery3d," +
                 "com.fde.taskmanager");
         Log.d(TAG, "getPersistDockApp() returned: " + apps);
         return stringToArray(apps + "," + defaultApps);
