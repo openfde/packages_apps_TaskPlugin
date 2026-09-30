@@ -78,21 +78,24 @@ public class ScreenSizeUtils {
             Log.w(TAG, "update display metrics failed: " + e.getMessage());
         }
 
-        // FDE 桌面模式的实际分辨率优先取系统属性，取不到再回退真实显示尺寸。
+        // 以真实显示尺寸为准：getRealMetrics 能反映运行时的分辨率变化（含 wm size override、
+        // FDE 分辨率切换）；openfde.display_* 属性只在拿不到真实尺寸时兜底。
         Integer propertyWidth = Utils.getProperty("openfde.display_width", 0);
         Integer propertyHeight = Utils.getProperty("openfde.display_height", 0);
-        if (propertyWidth != null && propertyHeight != null
+        if (realWidthPx > 0 && realHeightPx > 0) {
+            screenWidth = realWidthPx;
+            screenHeight = realHeightPx;
+        } else if (propertyWidth != null && propertyHeight != null
                 && propertyWidth > 0 && propertyHeight > 0) {
             screenWidth = propertyWidth;
             screenHeight = propertyHeight;
-        } else if (realWidthPx > 0 && realHeightPx > 0) {
-            screenWidth = realWidthPx;
-            screenHeight = realHeightPx;
         } else {
             screenWidth = DEFAULT_WIDTH;
             screenHeight = DEFAULT_HEIGHT;
         }
-        Log.d(TAG, "update: " + screenWidth + "x" + screenHeight
+        Log.d(TAG, "update: real=" + realWidthPx + "x" + realHeightPx
+                + " property=" + propertyWidth + "x" + propertyHeight
+                + " -> " + screenWidth + "x" + screenHeight
                 + " density=" + density + " densityDpi=" + densityDpi
                 + " fontScale=" + fontScale);
     }

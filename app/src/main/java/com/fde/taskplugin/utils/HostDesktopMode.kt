@@ -38,21 +38,38 @@ object HostDesktopMode {
         if (initialized) {
             return
         }
-        try {
-            val hostLoader = loadHostClassLoader(context) ?: run {
-                Log.w(TAG, "host class loader not found")
-                return
+
+        val hostLoader = loadHostClassLoader(context) ?: run {
+            Log.w(TAG, "host class loader not found")
+            return
+        }
+
+        // 1) SystemUiProxy.INSTANCE.get(context)：拿到宿主代理实例
+        val proxyClass = try {
+            hostLoader.loadClass(PROXY_CLASS).also { clazz ->
+                val singleton = clazz.getField("INSTANCE").get(null)
+                val proxy = singleton.javaClass.getMethod("get", Context::class.java)
+                    .invoke(singleton, resolveAppContext(context))
+                proxyInstance = proxy
             }
-            val proxyClass = hostLoader.loadClass(PROXY_CLASS)
-            val singleton = proxyClass.getField("INSTANCE").get(null)
-            val proxy = singleton.javaClass.getMethod("get", Context::class.java)
-                .invoke(singleton, resolveAppContext(context))
-            proxyInstance = proxy
+        } catch (t: Throwable) {
+            Log.w(TAG, "resolve SystemUiProxy failed", t)
+            return
+        }
+
+        // 2) desktopMode 字段（SystemUI 连接后才非空，方法查找不依赖它的值）
+        try {
             desktopModeField = proxyClass.getDeclaredField("desktopMode").apply {
                 isAccessible = true
             }
-            desktopModeInstance = desktopModeField?.get(proxy)
+            desktopModeInstance = desktopModeField?.get(proxyInstance)
+            Log.d(TAG, "desktopMode interface = ${desktopModeField?.type}")
+        } catch (t: Throwable) {
+            Log.w(TAG, "resolve desktopMode field failed", t)
+        }
 
+        // 3) showDesktopApp(taskId, transition, reason)
+        try {
             val reasonClass = hostLoader.loadClass(REASON_CLASS)
             toFrontReason = reasonClass.getMethod("valueOf", String::class.java)
                 .invoke(null, "TASKBAR_TAP")
@@ -62,20 +79,32 @@ object HostDesktopMode {
                 RemoteTransition::class.java,
                 reasonClass
             )
-            minimizeDesktopAppMethod = hostLoader.loadClass(DESKTOP_MODE_CLASS).getMethod(
+        } catch (t: Throwable) {
+            Log.w(TAG, "resolve showDesktopApp failed", t)
+        }
+
+        // 4) IDesktopMode.minimizeDesktopApp(taskId)
+        try {
+            // 优先使用 desktopMode 字段的运行时类型：与宿主实际使用的接口完全一致，
+            // 避免 hostLoader.loadClass(类名) 因类未被打包/类名不一致抛 ClassNotFoundException。
+            val desktopModeClass = desktopModeField?.type
+                ?: hostLoader.loadClass(DESKTOP_MODE_CLASS)
+            minimizeDesktopAppMethod = desktopModeClass.getMethod(
                 "minimizeDesktopApp",
                 Int::class.javaPrimitiveType!!
             )
-            initialized = true
-            Log.d(
-                TAG,
-                "ready show=${showDesktopAppMethod != null}" +
-                        " minimize=${minimizeDesktopAppMethod != null}" +
-                        " desktopMode=${desktopModeInstance != null}"
-            )
         } catch (t: Throwable) {
-            Log.w(TAG, "init failed", t)
+            Log.w(TAG, "resolve minimizeDesktopApp failed, interface=${desktopModeField?.type}", t)
         }
+
+        initialized = showDesktopAppMethod != null || minimizeDesktopAppMethod != null
+        Log.d(
+            TAG,
+            "ready show=${showDesktopAppMethod != null}" +
+                    " minimize=${minimizeDesktopAppMethod != null}" +
+                    " desktopMode=${desktopModeInstance != null}" +
+                    " initialized=$initialized"
+        )
     }
 
     /**

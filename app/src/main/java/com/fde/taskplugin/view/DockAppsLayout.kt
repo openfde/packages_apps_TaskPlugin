@@ -3,17 +3,14 @@ package com.fde.taskplugin.view
 import android.accessibilityservice.AccessibilityService.GLOBAL_ACTION_ACCESSIBILITY_ALL_APPS
 import android.app.ActivityManager
 import android.app.PendingIntent
-import android.app.RemoteAction
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
 import android.content.ComponentName
 import android.content.Context
-import android.content.Context.RECEIVER_EXPORTED
 import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
@@ -33,7 +30,6 @@ import android.view.accessibility.AccessibilityManager
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
-import com.fde.taskplugin.GlobalSystemUIContext
 import com.fde.taskplugin.R
 import com.fde.taskplugin.TaskInfo
 import com.fde.taskplugin.TaskInfo.Companion.DOCK_TYPE_RECENTS
