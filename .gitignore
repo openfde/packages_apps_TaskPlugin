@@ -7,3 +7,6 @@ gradle.properties
 gradle/
 gradlew
 gradlew.bat
+/app/release/output-metadata.json
+/app/release/baselineProfiles/
+/.kotlin/
