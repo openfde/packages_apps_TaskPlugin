@@ -37,9 +37,9 @@ class AllAppsProvider (context: Context, val updater: OverviewAppsUpdater?) : Ap
 
     override fun provideAppsWithFilterAsync(type: Int, name: String?) {
         Log.d(TAG, "provideAppsWithFilterAsync() called with: type = $type, name = $name")
-        if (name != null) {
-            handler.filter = name
-        }
+        // null/empty is the reset request from AppOverviewWindow.destroy(); it must
+        // overwrite the previous keyword or the reload stays filtered (issue #491).
+        handler.filter = name ?: ""
         appLoaderTask.postSart()
     }
 
