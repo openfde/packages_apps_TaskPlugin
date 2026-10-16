@@ -27,12 +27,6 @@ constructor(
     // 每累计约一个刻度的位移翻一页；位移成倍增大时按比例翻更多页，
     // 而不是“每个手势最多只翻一页”（那会把大距离滚动也限制成一页）。
     private val PAGE_TURN_DISTANCE: Float = 60f
-    // 调试开关（openfde/openfde#494）：置 true 时输出专用 tag 的手势轨迹日志，
-    // 用于定位“改动未生效”的原因：本拷贝是否在运行、APK 是否真的更新、
-    // 位移是否达到阈值、两条触摸路径是否重复或漏处理。
-    // 现场抓取：adb logcat -s openfde494:V
-    private val DEBUG_GESTURE: Boolean = true
-    private val DEBUG_TAG = "openfde494"
     private var mStartX = 0f
     private var mStartY = 0f
     private var mMenuVisibleOnDown = false
@@ -51,17 +45,10 @@ constructor(
         setOnTouchListener { v, event -> handleTouchEvent(event) }
     }
 
-    private fun dbg(msg: String) {
-        if (DEBUG_GESTURE) {
-            Log.d(DEBUG_TAG, "impl=TaskPlugin.LoadedViewPager pid=" + android.os.Process.myPid() + " " + msg)
-        }
-    }
-
     private fun goToNextPage() {
         val currentItem = currentItem
         val totalItems = adapter?.count ?: 0 // 使用 Elvis 运算符提供默认值
 
-        dbg("flip next from=" + currentItem + " total=" + totalItems)
         if (currentItem < totalItems - 1) {
             setCurrentItem(currentItem + 1, true)
         }
@@ -69,7 +56,6 @@ constructor(
     // 翻到上一页
     private fun goToPreviousPage() {
         val currentItem = currentItem
-        dbg("flip prev from=" + currentItem)
         if (currentItem > 0) {
             setCurrentItem(currentItem - 1, true)
         }
@@ -82,9 +68,7 @@ constructor(
         if (abs(dy) < mTriggerDistance) {
             return 0
         }
-        val pages = max(1, Math.round(abs(dy) / PAGE_TURN_DISTANCE))
-        dbg("targetPageCount dy=" + dy + " -> " + pages + " (min=" + mTriggerDistance + " step=" + PAGE_TURN_DISTANCE + ")")
-        return pages
+        return max(1, Math.round(abs(dy) / PAGE_TURN_DISTANCE))
     }
 
     private fun resetGesture() {
@@ -99,19 +83,13 @@ constructor(
     // 避免出现修复前两条路径各自翻页的情况。
     private fun trackGestureMove(ev: MotionEvent) {
         if (ev.eventTime == mLastGestureEventTime) {
-            dbg("move skip: duplicate eventTime=" + ev.eventTime)
             return
         }
         mLastGestureEventTime = ev.eventTime
-        val step = ev.y - mLastGestureY
-        mGestureDy += step
+        mGestureDy += ev.y - mLastGestureY
         mLastGestureY = ev.y
-        dbg("move action=" + ev.action + " src=0x" + Integer.toHexString(ev.source) + " x=" + ev.x + " y=" + ev.y
-            + " step=" + step + " totalDy=" + mGestureDy + " turned=" + mPagesTurnedInGesture
-            + " slop=" + ViewConfiguration.get(context).scaledTouchSlop)
         // 横向漂移超过触摸抖动容差时按横向滚动处理，不触发翻页
         if (abs(ev.x - mStartX) > ViewConfiguration.get(context).scaledTouchSlop) {
-            dbg("move skip: horizontal drift dx=" + (ev.x - mStartX))
             return
         }
         val target = targetPageCount(mGestureDy)
@@ -146,9 +124,6 @@ constructor(
                 lastInterceptY = -1f
                 resetGesture()
                 mLastGestureY = ev!!.y
-                dbg("down via onInterceptTouchEvent x=" + ev!!.x + " y=" + ev!!.y
-                    + " src=0x" + Integer.toHexString(ev!!.source) + " item=" + currentItem
-                    + " count=" + (adapter?.count ?: -1) + " blockScroll=" + blockScroll)
             }
             MotionEvent.ACTION_MOVE -> {
                 lastInterceptX = -1f
@@ -170,8 +145,6 @@ constructor(
                 }
                 lastInterceptX = -1f
                 lastInterceptY = -1f
-                dbg("up via onInterceptTouchEvent totalDy=" + mGestureDy + " turned=" + mPagesTurnedInGesture
-                    + " item=" + currentItem)
                 resetGesture()
             }
         }
@@ -196,9 +169,6 @@ constructor(
                 mIsHorizontalScroll = false
                 resetGesture()
                 mLastGestureY = event.y
-                dbg("down via OnTouchListener x=" + event.x + " y=" + event.y
-                    + " src=0x" + Integer.toHexString(event.source) + " item=" + currentItem
-                    + " count=" + (adapter?.count ?: -1))
             }
 
             MotionEvent.ACTION_MOVE ->  {
@@ -215,8 +185,6 @@ constructor(
                 mIsTouching = false
                 val dx = event.x - mStartX
                 Log.d(TAG, "handleTouchEvent() called with: dx = $dx")
-                dbg("up via OnTouchListener totalDy=" + mGestureDy + " turned=" + mPagesTurnedInGesture
-                    + " item=" + currentItem)
                 resetGesture()
             }
         }
