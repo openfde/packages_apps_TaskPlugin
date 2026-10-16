@@ -27,6 +27,9 @@ constructor(
     private var mMenuVisibleOnDown = false
     private val MENU_DISMISS_GRACE_MS = 300L
     private var mIsHorizontalScroll = false
+    // 一次手势最多翻一页：滚轮合成的竖直滑动会被拆成多帧 MOVE，
+    // 原判据（连续两帧 X 相同即翻页）会在同一手势内反复命中，导致一次最小滚动连翻多页。
+    private var mPageTurnedInGesture = false
     val TAG = "LoadedViewPager"
     var blockScroll : Boolean = false
     var mIsTouching : Boolean = false
@@ -69,6 +72,7 @@ constructor(
                                 SystemClock.uptimeMillis() - ctx.dismissTime < MENU_DISMISS_GRACE_MS))
                 lastInterceptX = -1f
                 lastInterceptY = -1f
+                mPageTurnedInGesture = false
             }
             MotionEvent.ACTION_MOVE -> {
                 if(blockScroll){
@@ -79,13 +83,18 @@ constructor(
                     lastInterceptX = ev!!.x
                     lastInterceptY = ev!!.y
                 } else {
-                    if(lastInterceptX == ev!!.x ){
+                    val moveDy = ev!!.y - lastInterceptY
+                    val moveDx = ev!!.x - lastInterceptX
+                    if(!mPageTurnedInGesture
+                        && Math.abs(moveDx) < ViewConfiguration.get(context).scaledTouchSlop
+                        && Math.abs(moveDy) >= mTriggerDistance){
                         lastInterceptX = -1f
-                        if(lastInterceptY > ev!!.y){
+                        if(moveDy < 0){
                             goToNextPage()
                         } else {
                             goToPreviousPage()
                         }
+                        mPageTurnedInGesture = true
                         blockScroll = true
                         lastInterceptY = -1f
                     }
@@ -106,6 +115,7 @@ constructor(
                 }
                 lastInterceptX = -1f
                 lastInterceptY = -1f
+                mPageTurnedInGesture = false
             }
         }
 
@@ -127,6 +137,7 @@ constructor(
                 mStartX = event.x
                 mStartY = event.y
                 mIsHorizontalScroll = false
+                mPageTurnedInGesture = false
             }
 
             MotionEvent.ACTION_MOVE ->  {
@@ -134,9 +145,10 @@ constructor(
                 val dy = (event.y - mStartY).toDouble().toFloat()
 //                mIsHorizontalScroll = dx > dy && dx > ViewConfiguration.get(context).scaledTouchSlop
                 Log.d(TAG, "handleTouchEvent: dx:$dx dy:$dy $blockScroll")
-                if(!blockScroll ) {
+                if(!blockScroll && !mPageTurnedInGesture && Math.abs(dy) >= mTriggerDistance) {
                     blockScroll = true
-                    if(dx < 0){
+                    mPageTurnedInGesture = true
+                    if(dy < 0){
                         goToNextPage()
                     } else {
                         goToPreviousPage()
