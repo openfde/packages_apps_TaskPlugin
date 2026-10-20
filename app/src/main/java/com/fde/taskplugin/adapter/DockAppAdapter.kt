@@ -33,6 +33,7 @@ import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_SHOW_RECENTS
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.MAX_RUNNING_TASKS
 import com.fde.taskplugin.utils.AppUtils
+import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.ImageUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AbsTopPopWindow
@@ -84,6 +85,8 @@ class DockAppAdapter(private val context: Context) :
     override fun getItemCount(): Int {
         return apps.size
     }
+
+    fun getItem(position: Int): TaskInfo? = apps.getOrNull(position)
 
     private fun updateIconPath(info: TaskInfo) {
         val app = info.packageName
@@ -174,6 +177,7 @@ class DockAppAdapter(private val context: Context) :
 //                context.sendBroadcast(Intent(TASK_CLICK_ACTION))
                 listener?.onItemClick(context.resources.getString(R.string.show), app)
             } else {
+                reportMinimizeTarget(app, holder.appll)
                 listener?.onItemClick(context.resources.getString(R.string.minimize), app)
             }
         }
@@ -188,6 +192,7 @@ class DockAppAdapter(private val context: Context) :
 //                context.sendBroadcast(Intent(TASK_CLICK_ACTION))
                 listener?.onItemClick(context.resources.getString(R.string.show), app)
             } else {
+                reportMinimizeTarget(app, holder.iconIV)
                 listener?.onItemClick(context.resources.getString(R.string.minimize), app)
             }
             holder.iconIV.postDelayed( RELEASE_DURATION, {
@@ -494,6 +499,9 @@ class DockAppAdapter(private val context: Context) :
         }
         windowOperator?.setOnClickListener{
             contextWindow?.dismiss()
+            if (windowOperator.text == context.resources.getString(R.string.minimize)) {
+                reportMinimizeTarget(app, v)
+            }
             listener?.onItemClick(windowOperator.text.toString(), app)
         }
         settingsTv?.setOnClickListener {
@@ -504,6 +512,25 @@ class DockAppAdapter(private val context: Context) :
             contextWindow?.dismiss()
             listener?.onItemClick(desktopTv?.text.toString(), app)
         }
+    }
+
+    /**
+     * 点击 dock 图标最小化时，把图标当前位置作为一次性动画目标传给 Shell。
+     * 标题栏最小化则使用 [DockAppsLayout] 周期性上报的包名/位置缓存。
+     */
+    private fun reportMinimizeTarget(app: TaskInfo, anchor: View) {
+        if (app.id == TaskInfo.ID_UNDEFINED) {
+            return
+        }
+        val icon = anchor.findViewById<View>(R.id.app_icon_iv) ?: anchor
+        if (!icon.isShown) {
+            return
+        }
+        val bounds = Utils.getScaledBoundsOnScreen(icon)
+        if (bounds.isEmpty) {
+            return
+        }
+        HostDesktopMode.setMinimizeAnimationTarget(app.id, bounds)
     }
 
     private fun isShowing(id: Int): Boolean {

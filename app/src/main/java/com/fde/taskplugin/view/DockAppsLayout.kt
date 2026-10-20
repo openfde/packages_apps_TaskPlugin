@@ -12,12 +12,14 @@ import android.content.IntentFilter
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
 import android.os.UserManager
 import android.text.TextUtils
 import android.util.AttributeSet
 import android.util.Log
+import android.view.Display
 import android.view.Gravity
 import android.view.MotionEvent
 import android.view.View
@@ -42,6 +44,7 @@ import com.fde.taskplugin.provider.DockAppsProvider
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_OVERVIEW
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_OPEN_TRASH
 import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_SHOW_RECENTS
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.MAX_RUNNING_TASKS
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.DocumentsUiHelper
@@ -94,6 +97,15 @@ constructor(
 
     private var itemDecoration: DockAppItemDecoration? = null
     var appOverviewWindow: AppOverviewWindow ?= null
+    private var lastDockBoundsSignature: String? = null
+    private var lastReportedDisplayId = Display.DEFAULT_DISPLAY
+    private var dockBoundsReportRetries = 0
+    private val reportBoundsRunnable = Runnable { reportDockIconBounds() }
+    private val startupReportRunnable =
+        Runnable {
+            lastDockBoundsSignature = null
+            reportDockIconBounds()
+        }
 
     var globalSearchRecevier:GlobalSearchRecevier ?= null
     var filter: IntentFilter ?= null
@@ -145,6 +157,10 @@ constructor(
         private const val PREVIEW_BOTTOM_GAP = 6
         /** dock 自动缩小的下限（与 FDE 设置里 dock 缩放的最小值 0.5 一致） */
         private const val MIN_DOCK_SCALE = 0.5f
+        private const val DOCK_BOUNDS_REPORT_DELAY_MS = 80L
+        private const val DOCK_BOUNDS_RETRY_DELAY_MS = 500L
+        private const val DOCK_BOUNDS_STARTUP_REPORT_DELAY_MS = 2_000L
+        private const val MAX_DOCK_BOUNDS_REPORT_RETRIES = 30
     }
 
     init {
@@ -166,9 +182,99 @@ constructor(
             override fun onScrollStateChanged(recyclerView: RecyclerView, newState: Int) {
                 if (newState != RecyclerView.SCROLL_STATE_IDLE) {
                     dismissTaskPreview()
+                } else {
+                    scheduleDockIconBoundsReport()
                 }
             }
         })
+        addOnLayoutChangeListener { _, left, top, right, bottom, oldLeft, oldTop, oldRight, oldBottom ->
+            if (left != oldLeft || top != oldTop || right != oldRight || bottom != oldBottom) {
+                scheduleDockIconBoundsReport()
+            }
+        }
+    }
+
+    /**
+     * 把 dock 上运行中应用的图标位置同步给 Shell，供标题栏最小化时确定“吸进图标”的终点。
+     * 每次布局/滚动结束后上报一次，内容没变化时跳过 binder 调用。
+     */
+    fun reportDockIconBounds() {
+        val displayId = display?.displayId ?: Display.DEFAULT_DISPLAY
+        lastReportedDisplayId = displayId
+        val packageBounds = Bundle()
+        val taskBounds = Bundle()
+        val signature = StringBuilder().append(displayId).append('|')
+        // 一次拿到所有运行任务，供 X11（同一包名、多个窗口）和多窗口应用按 taskId 匹配。
+        val runningTasks = activityManager.getRunningTasks(MAX_RUNNING_TASKS) ?: emptyList()
+        for (i in 0 until childCount) {
+            val child = getChildAt(i) ?: continue
+            if (!child.isShown) continue
+            val position = getChildAdapterPosition(child)
+            if (position == RecyclerView.NO_POSITION) continue
+            val app = dockAppAdapter?.getItem(position) ?: continue
+            // 最近任务/回收站是固定入口，不是普通应用图标，不能作为最小化目标。
+            if (isFixedTask(app)) continue
+            val icon = child.findViewById<View>(R.id.app_icon_iv) ?: continue
+            if (!icon.isShown) continue
+            val iconBounds = Utils.getScaledBoundsOnScreen(icon)
+            if (iconBounds.isEmpty) continue
+
+            val matchedTaskIds = ArrayList<Int>()
+            for (task in runningTasks) {
+                if (!isTaskForDockIcon(task, app)) continue
+                matchedTaskIds.add(task.taskId)
+                taskBounds.putParcelable(task.taskId.toString(), iconBounds)
+                task.baseActivity?.packageName?.let {
+                    packageBounds.putParcelable(it, iconBounds)
+                }
+            }
+            // getRunningTasks 偶尔拿不到目标窗口（例如刚启动/正在重排），至少上报当前 taskId。
+            if (matchedTaskIds.isEmpty() && app.id != TaskInfo.ID_UNDEFINED) {
+                matchedTaskIds.add(app.id)
+                taskBounds.putParcelable(app.id.toString(), iconBounds)
+                app.runningTaskInfo?.baseActivity?.packageName?.let {
+                    packageBounds.putParcelable(it, iconBounds)
+                }
+            }
+            signature
+                .append(app.packageName)
+                .append(':')
+                .append(matchedTaskIds.sorted().joinToString(","))
+                .append('@')
+                .append(iconBounds.toShortString())
+                .append(';')
+        }
+        val newSignature = signature.toString()
+        if (newSignature == lastDockBoundsSignature) return
+        if (HostDesktopMode.updateDockIconBounds(displayId, packageBounds, taskBounds)) {
+            lastDockBoundsSignature = newSignature
+            dockBoundsReportRetries = 0
+        } else if (dockBoundsReportRetries < MAX_DOCK_BOUNDS_REPORT_RETRIES) {
+            // SystemUI/Shell 可能还没连接上，稍后重试；成功一次后不再重试。
+            dockBoundsReportRetries++
+            postDelayed(reportBoundsRunnable, DOCK_BOUNDS_RETRY_DELAY_MS)
+        }
+    }
+
+    private fun scheduleDockIconBoundsReport() {
+        removeCallbacks(reportBoundsRunnable)
+        postDelayed(reportBoundsRunnable, DOCK_BOUNDS_REPORT_DELAY_MS)
+    }
+
+    private fun isTaskForDockIcon(
+        task: ActivityManager.RunningTaskInfo,
+        app: TaskInfo,
+    ): Boolean {
+        if (task.taskId == app.id) return true
+        val taskPackage = dockProvider.getRunningTaskInfoPackageName(task) ?: return false
+        val key =
+            if (Utils.isX11App(taskPackage, task.topActivity)) {
+                val label = task.taskDescription?.label ?: return false
+                "$taskPackage#$label"
+            } else {
+                taskPackage
+            }
+        return key == app.packageName
     }
 
     private fun setupDragHelper() {
@@ -281,6 +387,11 @@ constructor(
     override fun onAttachedToWindow() {
         super.onAttachedToWindow()
         disableClipForUnboundedDrag()
+        scheduleDockIconBoundsReport()
+        // Shell 可能比 Launcher 晚完成初始化。启动后再补报一次，避免第一次广播丢失后
+        // 在任务切换前一直没有标题栏最小化目标。
+        removeCallbacks(startupReportRunnable)
+        postDelayed(startupReportRunnable, DOCK_BOUNDS_STARTUP_REPORT_DELAY_MS)
     }
 
     private fun disableClipForUnboundedDrag() {
@@ -297,8 +408,15 @@ constructor(
 
     override fun onDetachedFromWindow() {
         super.onDetachedFromWindow()
+        removeCallbacks(reportBoundsRunnable)
+        removeCallbacks(startupReportRunnable)
         dismissTaskPreview()
         dockProvider.unregisterTaskStackListener()
+        // dock 不可用时清空缓存，避免最小化动画飞向已经不存在的位置。
+        val displayId = display?.displayId ?: lastReportedDisplayId
+        lastDockBoundsSignature = null
+        dockBoundsReportRetries = 0
+        HostDesktopMode.updateDockIconBounds(displayId, Bundle(), Bundle())
     }
     fun initApps(dockScaleFactor: Float) {
         dismissTaskPreview()
@@ -324,6 +442,7 @@ constructor(
         dockAppAdapter?.dockAppLayout = this
         updateNaviWidth(tasks.size)
         dockProvider.registerTaskStackListener()
+        scheduleDockIconBoundsReport()
 //        globalSearchRecevier = GlobalSearchRecevier()
 //        filter = IntentFilter()
 //        filter?.addAction(SYSTEM_ALL_APP_ACTION)
@@ -364,6 +483,7 @@ constructor(
             dockAppAdapter.notifyDataSetChangedWapper()
         }
         updateTaskPreviewAfterDataChange()
+        scheduleDockIconBoundsReport()
     }
 
     override fun setTop(taskInfo: TaskInfo?, needAdd: Boolean, isTop: Boolean) {
@@ -388,6 +508,7 @@ constructor(
         dockAppAdapter?.notifyDataSetChangedWapper()
         updateNaviWidth(tasks.size)
         updateTaskPreviewAfterDataChange()
+        scheduleDockIconBoundsReport()
     }
 
     override fun notifyDockAapp(list: MutableList<TaskInfo>) {
@@ -400,6 +521,7 @@ constructor(
         dockAppAdapter?.notifyDataSetChangedWapper()
         updateNaviWidth(tasks.size)
         updateTaskPreviewAfterDataChange()
+        scheduleDockIconBoundsReport()
     }
 
     private fun isTrashTask(taskInfo: TaskInfo): Boolean {
