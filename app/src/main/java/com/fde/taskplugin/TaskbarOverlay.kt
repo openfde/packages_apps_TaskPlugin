@@ -16,6 +16,7 @@ import android.os.Looper
 import android.provider.Settings
 import android.util.AttributeSet
 import android.util.Log
+import android.view.Display
 import android.view.Gravity
 import android.view.LayoutInflater
 import android.view.View
@@ -195,6 +196,15 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
 
     override fun setup(taskbarRoot: ViewGroup) {
         pluginContext ?: return
+        // 宿主会为每个 display 创建一个 taskbarRoot 并分别回调 setup()，
+        // 但本插件只有一个 dock 实例，只能挂到主显示（display 0）上。
+        // 否则第二个 display 回调时会把已经挂在 display 0 上的 dock 再次 addView，
+        // 触发 "The specified child already has a parent"。
+        val displayId = resolveDisplayId(taskbarRoot)
+        if (displayId != Display.DEFAULT_DISPLAY) {
+            Log.d(TAG, "setup() skip display $displayId, only display 0 is supported")
+            return
+        }
         // taskbarRoot 现在是整个 taskbar 窗口根（全宽、70dp），插件直接往里面放 dock。
         navi = taskbarRoot
         navi!!.removeAllViews()
@@ -215,8 +225,25 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         updateNaviDock()
     }
 
+    /** setup() 传入的是某个 display 的 taskbar 根视图，这里取它所属的 displayId。 */
+    private fun resolveDisplayId(root: View): Int {
+        root.display?.let { return it.displayId }
+        return try {
+            root.context.display?.displayId ?: Display.DEFAULT_DISPLAY
+        } catch (e: UnsupportedOperationException) {
+            Log.w(TAG, "resolveDisplayId failed, assume default display", e)
+            Display.DEFAULT_DISPLAY
+        }
+    }
+
     private fun updateNaviDock() {
-        navi!!.removeAllViews()
+        val root = navi ?: return
+        root.removeAllViews()
+        // 宿主重建 taskbar（例如分辨率/显示配置变化后 recreateTaskbarForDisplay）时会带着
+        // 新的根视图再次回调 setup()。此时 dock 可能还挂在旧根视图上，
+        // 只清理新根视图是不够的，直接 addView 会抛
+        // "The specified child already has a parent"。
+        detachDockFromParent()
         dockAppsLayout?.onDestroy()
         mDockScaleFactor = readDockScale()
         pluginContext?.let { ScreenSizeUtils.getInstance(it).refresh(it) }
@@ -228,8 +255,9 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             FrameLayout.LayoutParams.MATCH_PARENT,
             Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
         )
-        navi?.addView(dockAppsGroup, dockParams)
-        dockAppsLayout?.navi = navi
+        val dock = dockAppsGroup ?: return
+        root.addView(dock, dockParams)
+        dockAppsLayout?.navi = root
         dockAppsLayout?.initApps(mDockScaleFactor)
         dockAppsGroup?.setOnClickListener{
 //            traverseAndPrint(navi!!, 0)
@@ -248,6 +276,12 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             val cardView = dockAppsGroup?.findViewById<CardView>(R.id.root_blur)
             cardView?.setCardBackgroundColor(Color.parseColor("#aaF2F6FA"))
         }
+    }
+
+    /** dock 可能仍挂在旧 taskbar 根视图上，重新添加前先摘掉。 */
+    private fun detachDockFromParent() {
+        val dock = dockAppsGroup ?: return
+        (dock.parent as? ViewGroup)?.removeView(dock)
     }
 
     @SuppressLint("InflateParams")
@@ -338,6 +372,7 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         dockAppsLayout?.dismissAllPopups()
         dockAppsLayout?.onDestroy()
         navi?.removeAllViews()
+        detachDockFromParent()
         dockAppsGroup = LayoutInflater.from(context)
             .inflate(R.layout.dock_apps_layout, null) as ViewGroup
         dockAppsGroup?.defaultFocusHighlightEnabled = false
