@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.PixelFormat
 import android.graphics.Rect
 import android.graphics.drawable.Drawable
@@ -97,17 +98,32 @@ object Utils {
         if (view.width <= 0 || view.height <= 0 || !view.isAttachedToWindow) {
             return Rect()
         }
-        val location = IntArray(2)
-        view.getLocationOnScreen(location)
-        val centerX = location[0] + view.width / 2f
-        val centerY = location[1] + view.height / 2f
-        val width = (view.width * view.scaleX).coerceAtLeast(1f)
-        val height = (view.height * view.scaleY).coerceAtLeast(1f)
+        // transformMatrixToGlobal() includes the view's own press scale/pivot and any scaling or
+        // translation from the dock/taskbar parent hierarchy. Using getLocationOnScreen() plus
+        // the unscaled width only works when none of the parents are scaled.
+        val matrix = Matrix()
+        view.transformMatrixToGlobal(matrix)
+        val points =
+            floatArrayOf(
+                0f,
+                0f,
+                view.width.toFloat(),
+                0f,
+                view.width.toFloat(),
+                view.height.toFloat(),
+                0f,
+                view.height.toFloat(),
+            )
+        matrix.mapPoints(points)
+        val left = minOf(points[0], points[2], points[4], points[6])
+        val top = minOf(points[1], points[3], points[5], points[7])
+        val right = maxOf(points[0], points[2], points[4], points[6])
+        val bottom = maxOf(points[1], points[3], points[5], points[7])
         return Rect(
-            (centerX - width / 2f).toInt(),
-            (centerY - height / 2f).toInt(),
-            (centerX + width / 2f).toInt(),
-            (centerY + height / 2f).toInt(),
+            left.toInt(),
+            top.toInt(),
+            right.toInt().coerceAtLeast(left.toInt() + 1),
+            bottom.toInt().coerceAtLeast(top.toInt() + 1),
         )
     }
 
