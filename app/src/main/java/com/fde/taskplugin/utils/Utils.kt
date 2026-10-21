@@ -8,7 +8,9 @@ import android.content.Intent
 import android.content.SharedPreferences
 import android.graphics.Bitmap
 import android.graphics.Canvas
+import android.graphics.Matrix
 import android.graphics.PixelFormat
+import android.graphics.Rect
 import android.graphics.drawable.Drawable
 import android.graphics.drawable.LayerDrawable
 import android.media.AudioSystem
@@ -86,6 +88,43 @@ object Utils {
         } catch (e: Exception) {
             e.printStackTrace()
         }
+    }
+
+    /**
+     * 返回 View 在屏幕上的实际可见矩形（考虑 scale，以 View 中心为缩放中心）。
+     * dock 图标按压缩放时，最小化动画的终点应与用户看到的图标大小一致。
+     */
+    @JvmStatic fun getScaledBoundsOnScreen(view: View): Rect {
+        if (view.width <= 0 || view.height <= 0 || !view.isAttachedToWindow) {
+            return Rect()
+        }
+        // transformMatrixToGlobal() includes the view's own press scale/pivot and any scaling or
+        // translation from the dock/taskbar parent hierarchy. Using getLocationOnScreen() plus
+        // the unscaled width only works when none of the parents are scaled.
+        val matrix = Matrix()
+        view.transformMatrixToGlobal(matrix)
+        val points =
+            floatArrayOf(
+                0f,
+                0f,
+                view.width.toFloat(),
+                0f,
+                view.width.toFloat(),
+                view.height.toFloat(),
+                0f,
+                view.height.toFloat(),
+            )
+        matrix.mapPoints(points)
+        val left = minOf(points[0], points[2], points[4], points[6])
+        val top = minOf(points[1], points[3], points[5], points[7])
+        val right = maxOf(points[0], points[2], points[4], points[6])
+        val bottom = maxOf(points[1], points[3], points[5], points[7])
+        return Rect(
+            left.toInt(),
+            top.toInt(),
+            right.toInt().coerceAtLeast(left.toInt() + 1),
+            bottom.toInt().coerceAtLeast(top.toInt() + 1),
+        )
     }
 
     @JvmStatic fun makeWindowParams(
