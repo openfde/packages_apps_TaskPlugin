@@ -54,6 +54,8 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         /** FDE 任务栏 dock 缩放对应 Settings.System 的 key（0.5 / 0.75 / 1.0 / 1.5 / 2.0） */
         private const val KEY_DOCK_SCALE = "dock_scale"
 
+        private const val KEY_TRASH_STORAGE = "trash_storage"
+
         private const val DEFAULT_DOCK_SCALE = 1.0f
         private const val MIN_DOCK_SCALE = 0.5f
         private const val MAX_DOCK_SCALE = 2.0f
@@ -314,7 +316,7 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         if (configObserver == null) {
             val observer = object : ContentObserver(configHandler) {
                 override fun onChange(selfChange: Boolean, uri: Uri?) {
-                    Log.d(TAG, "display config changed: $uri")
+                    Log.d(TAG, "display config changed trashLen: $uri")
                     scheduleDisplayConfigChanged()
                 }
             }
@@ -325,6 +327,8 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
                 Settings.Secure.getUriFor(KEY_DISPLAY_DENSITY_FORCED), false, observer)
             resolver.registerContentObserver(
                 Settings.System.getUriFor(KEY_DOCK_SCALE), false, observer)
+            resolver.registerContentObserver(
+                Settings.System.getUriFor(KEY_TRASH_STORAGE), false, observer)    
             configObserver = observer
         }
         if (configChangeReceiver == null) {

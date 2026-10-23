@@ -56,6 +56,7 @@ import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.WINDOW_PADDING
 import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_APP
 import kotlin.math.abs
+import android.provider.Settings
 
 
 class DockAppsLayout
@@ -540,7 +541,14 @@ constructor(
         val task = TaskInfo("com.android.documentsui", DocumentsUiHelper.getTrashLabel(context))
         task.action = ACTION_OPEN_TRASH
         task.dockType = DOCK_TYPE_TRASH
-        task.icon = context.getDrawable(R.drawable.icon_trash)
+        val trashLen = Settings.System.getInt(context.contentResolver, "trash_storage", 0)
+        Log.d(TAG, "2 trashLen "+trashLen)
+        if(trashLen > 0){
+            task.icon = context.getDrawable(R.drawable.icon_recycle_not_empty)
+        }else{
+            task.icon = context.getDrawable(R.drawable.icon_recycle_empty)
+        }
+       
         return task
     }
 
