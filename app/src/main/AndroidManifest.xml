@@ -29,6 +29,7 @@
     <permission android:name="android.permission.CONFIGURE_DISPLAY_BRIGHTNESS"
         android:protectionLevel="signature|privileged|development" />
     <uses-permission android:name="android.permission.WRITE_SETTINGS" />
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" />
     <!--    <uses-permission android:name="android.permission.BATTERY_STATS" />-->
 
     <!--    bluebooth-->
@@ -41,8 +42,15 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+    <uses-permission android:name="android.permission.WRITE_SETTINGS"/>
     <uses-permission android:name="com.android.systemui.permission.PLUGIN"
         android:protectionLevel="signature" />
+
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_IMAGES" />
+
+    <uses-permission
+        android:name="android.permission.READ_MEDIA_VIDEO" />
 
     <application
         android:label="@string/plugin_label"

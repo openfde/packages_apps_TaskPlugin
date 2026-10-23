@@ -46,6 +46,9 @@ import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_ACTIO
 import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_APP
 import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_NAME
 import com.fde.taskplugin.view.DockIconView.Companion.RELEASE_DURATION
+import com.fde.taskplugin.utils.DocumentsUiHelper
+import android.provider.Settings
+
 
 class DockAppAdapter(private val context: Context) :
     Adapter<DockAppAdapter.ViewHolder>() {
@@ -97,14 +100,22 @@ class DockAppAdapter(private val context: Context) :
         }
     }
 
+   
+
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val app = apps[position]
         val info = app.linuxInfo
         var loadMsg: String? = null
-        Glide.with(GlobalSystemUIContext.getContext()!!).clear(holder.iconIV)
+        Glide.with(GlobalSystemUIContext.getContext()!!).clear(holder.iconIV) 
         if(ACTION_OPEN_TRASH.equals(app.action)){
-            holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_trash))
+            val trashLen = Settings.System.getInt(context.contentResolver, "trash_storage", 0)
+            Log.d(TAG, "1 trashLen "+trashLen)
+            if(trashLen > 0){
+                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.ic_recycle_not_empty))
+            }else{
+                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.ic_recycle_empty))
+            }
             loadMsg = "load TRASH"
         } else if(ACTION_SHOW_RECENTS.equals(app.action)){
             holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_recents))
@@ -542,7 +553,7 @@ class DockAppAdapter(private val context: Context) :
                 break
             }
         }
-        return runningTask?.isVisible() ?: false
+        return runningTask?.isVisible ?: false
     }
 
     fun notifyDataSetChangedWapper() {
