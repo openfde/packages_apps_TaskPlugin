@@ -112,9 +112,9 @@ class DockAppAdapter(private val context: Context) :
             val trashLen = Settings.System.getInt(context.contentResolver, "trash_storage", 0)
             Log.d(TAG, "1 trashLen "+trashLen)
             if(trashLen > 0){
-                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.ic_recycle_not_empty))
+                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_recycle_not_empty))
             }else{
-                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.ic_recycle_empty))
+                holder.iconIV.setImageDrawable(app.icon ?: context.getDrawable(R.drawable.icon_recycle_empty))
             }
             loadMsg = "load TRASH"
         } else if(ACTION_SHOW_RECENTS.equals(app.action)){

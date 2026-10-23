@@ -544,9 +544,9 @@ constructor(
         val trashLen = Settings.System.getInt(context.contentResolver, "trash_storage", 0)
         Log.d(TAG, "2 trashLen "+trashLen)
         if(trashLen > 0){
-            task.icon = context.getDrawable(R.drawable.ic_recycle_not_empty)
+            task.icon = context.getDrawable(R.drawable.icon_recycle_not_empty)
         }else{
-            task.icon = context.getDrawable(R.drawable.ic_recycle_empty)
+            task.icon = context.getDrawable(R.drawable.icon_recycle_empty)
         }
        
         return task
