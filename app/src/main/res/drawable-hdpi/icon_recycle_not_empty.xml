@@ -1,0 +1,40 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+  <!-- 背景保持不变 -->
+  <path
+      android:pathData="M10,0L90,0A10,10 0,0 1,100 10L100,90A10,10 0,0 1,90 100L10,100A10,10 0,0 1,0 90L0,10A10,10 0,0 1,10 0z"
+      android:fillColor="#50677B"/>
+
+  <!-- 桶盖：左右缩进 -->
+  <path
+      android:pathData="M23,22L77,22L77,17Q77,14 73,14L57,14L55,10Q53,8 50,8Q47,8 45,10L43,14L27,14Q23,14 23,17Z"
+      android:fillColor="#F2E3DC"/>
+
+  <path
+      android:pathData="M26,32L74,32L74,34L26,34Z"
+      android:fillColor="#50677B"/>
+
+  <!-- 桶身：整体缩窄 -->
+  <path
+      android:pathData="M29,32C36,25 44,25 50,25C56,25 64,22 68,27Q71,32 74,32Q78,32 78,38L78,86Q78,92 73,92L27,92Q22,92 22,86L22,38Q22,32 26,32Z"
+      android:fillColor="#F2E3DC"/>
+
+  <!-- 左右竖条 -->
+  <path
+      android:pathData="M37,45h5v34h-5z"
+      android:fillColor="#50677B"/>
+
+  <path
+      android:pathData="M58,45h5v34h-5z"
+      android:fillColor="#50677B"/>
+
+  <!-- 顶部横线 -->
+  <path
+      android:pathData="M26,31.5L74,31.5"
+      android:strokeWidth="1"
+      android:strokeColor="#50677B"/>
+</vector>
