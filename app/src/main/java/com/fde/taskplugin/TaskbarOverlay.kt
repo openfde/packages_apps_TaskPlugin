@@ -78,6 +78,7 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
     // 系统 size/density/字体缩放变化的监听与去抖
     private val configHandler = Handler(Looper.getMainLooper())
     private var configObserver: ContentObserver? = null
+    private var trashObserver: ContentObserver? = null
     private var configChangeReceiver: BroadcastReceiver? = null
     private val configChangeRunnable = Runnable { onDisplayConfigChanged() }
     private var lastDensityDpi = -1
@@ -316,7 +317,7 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         if (configObserver == null) {
             val observer = object : ContentObserver(configHandler) {
                 override fun onChange(selfChange: Boolean, uri: Uri?) {
-                    Log.d(TAG, "display config changed trashLen: $uri")
+                    Log.d(TAG, "display config changed: $uri")
                     scheduleDisplayConfigChanged()
                 }
             }
@@ -327,10 +328,10 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
                 Settings.Secure.getUriFor(KEY_DISPLAY_DENSITY_FORCED), false, observer)
             resolver.registerContentObserver(
                 Settings.System.getUriFor(KEY_DOCK_SCALE), false, observer)
-            resolver.registerContentObserver(
-                Settings.System.getUriFor(KEY_TRASH_STORAGE), false, observer)    
             configObserver = observer
         }
+        // 回收站占用变化单独监听：只刷新回收站图标，不走整条 dock 的重建路径。
+        registerTrashStorageListener()
         if (configChangeReceiver == null) {
             val receiver = object : BroadcastReceiver() {
                 override fun onReceive(context: Context?, intent: Intent?) {
@@ -343,6 +344,25 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             context.registerReceiver(
                 receiver, IntentFilter(Intent.ACTION_CONFIGURATION_CHANGED))
             configChangeReceiver = receiver
+        }
+    }
+
+    /**
+     * 监听回收站占用（trash_storage）变化：清空回收站后只刷新回收站这一个
+     * ITEM（[DockAppsLayout.refreshTrashItem]），而不是整个列表都重建。
+     */
+    private fun registerTrashStorageListener() {
+        val context = pluginContext ?: return
+        if (trashObserver == null) {
+            val observer = object : ContentObserver(configHandler) {
+                override fun onChange(selfChange: Boolean, uri: Uri?) {
+                    Log.d(TAG, "trash storage changed: $uri")
+                    dockAppsLayout?.refreshTrashItem()
+                }
+            }
+            context.contentResolver.registerContentObserver(
+                Settings.System.getUriFor(KEY_TRASH_STORAGE), false, observer)
+            trashObserver = observer
         }
     }
 
@@ -399,6 +419,14 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             }
         }
         configObserver = null
+        trashObserver?.let {
+            try {
+                pluginContext?.contentResolver?.unregisterContentObserver(it)
+            } catch (e: Exception) {
+                Log.w(TAG, "unregisterContentObserver failed: ${e.message}")
+            }
+        }
+        trashObserver = null
         configChangeReceiver?.let {
             try {
                 pluginContext?.unregisterReceiver(it)
