@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Parcelable
 import android.util.Log
+import android.app.ActivityOptions;
 
 /**
  * 打开 / 清空 DocumentsUI 的回收站页面。
@@ -48,7 +49,19 @@ object DocumentsUiHelper {
 
     /** 打开回收站并触发清空流程（DocumentsUI 会弹确认框）。 */
     fun emptyTrash(context: Context): Boolean {
-        return launchTrash(context, empty = true)
+        val intent = Intent().apply {
+                component = ComponentName(
+                    "com.android.documentsui",
+                    "com.android.documentsui.files.EmptyTrashActivity"
+                )
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+
+        val options = ActivityOptions.makeCustomAnimation(
+            context,android.R.anim.fade_in, android.R.anim.fade_out
+        )
+        context.startActivity(intent, options.toBundle())
+        return true;
     }
 
     private fun launchTrash(context: Context, empty: Boolean): Boolean {
@@ -63,6 +76,7 @@ object DocumentsUiHelper {
             buildTrashStack(context)?.let { intent.putExtra(EXTRA_STACK, it) }
             intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             context.startActivity(intent)
+            
             Log.d(TAG, "launchTrash success empty=$empty")
             true
         } catch (t: Throwable) {

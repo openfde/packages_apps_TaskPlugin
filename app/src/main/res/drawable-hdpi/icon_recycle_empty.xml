@@ -1,0 +1,32 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="100dp"
+    android:height="100dp"
+    android:viewportWidth="100"
+    android:viewportHeight="100">
+
+  <!-- 背景 -->
+  <path
+      android:pathData="M10,0L90,0A10,10 0,0 1,100 10L100,90A10,10 0,0 1,90 100L10,100A10,10 0,0 1,0 90L0,10A10,10 0,0 1,10 0Z"
+      android:fillColor="#50677B"/>
+
+  <!-- 桶盖：统一缩窄 -->
+  <path
+      android:pathData="M23,24L77,24L77,20Q77,17 73,17L57,17L55,13Q53,11 50,11Q47,11 45,13L43,17L27,17Q23,17 23,20Z"
+      android:fillColor="#F2E3DC"/>
+
+  <!-- 桶身：统一缩窄并增大左右外边距 -->
+  <path
+      android:pathData="M27,33L73,33Q77,33 77,38L77,86Q77,92 72,92L28,92Q23,92 23,86L23,38Q23,33 27,33Z"
+      android:fillColor="#F2E3DC"/>
+
+  <!-- 左侧竖线 -->
+  <path
+      android:pathData="M38,44h5v35h-5z"
+      android:fillColor="#50677B"/>
+
+  <!-- 右侧竖线 -->
+  <path
+      android:pathData="M57,44h5v35h-5z"
+      android:fillColor="#50677B"/>
+
+</vector>

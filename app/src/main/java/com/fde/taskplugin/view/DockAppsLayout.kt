@@ -11,6 +11,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.LauncherApps
 import android.content.pm.PackageManager
+import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Bundle
 import android.os.Handler
@@ -56,6 +57,7 @@ import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.WINDOW_PADDING
 import com.fde.taskplugin.view.LoadedDockContextRecycleView.Companion.TYPE_APP
 import kotlin.math.abs
+import android.provider.Settings
 
 
 class DockAppsLayout
@@ -540,8 +542,19 @@ constructor(
         val task = TaskInfo("com.android.documentsui", DocumentsUiHelper.getTrashLabel(context))
         task.action = ACTION_OPEN_TRASH
         task.dockType = DOCK_TYPE_TRASH
-        task.icon = context.getDrawable(R.drawable.icon_trash)
+        task.icon = createTrashIcon(context)
         return task
+    }
+
+    /** 按当前 trash_storage 决定回收站图标的空/非空状态。 */
+    private fun createTrashIcon(context: Context): Drawable? {
+        val trashLen = Settings.System.getInt(context.contentResolver, "trash_storage", 0)
+        Log.d(TAG, "trash_storage $trashLen")
+        return if (trashLen > 0) {
+            context.getDrawable(R.drawable.icon_recycle_not_empty)
+        } else {
+            context.getDrawable(R.drawable.icon_recycle_empty)
+        }
     }
 
     private fun createRecentsTask(): TaskInfo {
@@ -580,6 +593,27 @@ constructor(
             return
         }
         openTrash()
+    }
+
+    /**
+     * 回收站图标单独刷新：清空/恢复回收站后只重新绑定回收站这一个 item，
+     * 不做整个 dock 列表的全量重建。先按最新 trash_storage 原地更新图标
+     * （保持实例引用稳定，不影响 DiffUtil 快照），再只通知该位置重绑。
+     */
+    fun refreshTrashItem() {
+        val trashIndex = tasks.indexOfFirst { isTrashTask(it) }
+        val trash = trashTask
+        if (trashIndex < 0 || trash == null) {
+            // 理论上回收站一定在列表里（appendFixedTasks 保证），这里兜底
+            Log.w(TAG, "refreshTrashItem: trash task not in list, fallback to full refresh")
+            dockAppAdapter?.notifyDataSetChangedWapper()
+            return
+        }
+        trash.icon = createTrashIcon(context)
+        dockAppAdapter?.notifyItemChanged(trashIndex)
+        updateTaskPreviewAfterDataChange()
+        scheduleDockIconBoundsReport()
+        Log.d(TAG, "refreshTrashItem: refresh trash item at $trashIndex")
     }
 
     private fun launchDocumentsUi() {
