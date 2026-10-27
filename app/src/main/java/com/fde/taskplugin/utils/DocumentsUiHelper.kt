@@ -5,6 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Parcelable
 import android.util.Log
+import android.app.ActivityOptions;
 
 /**
  * 打开 / 清空 DocumentsUI 的回收站页面。
@@ -53,16 +54,28 @@ object DocumentsUiHelper {
 
     private fun launchTrash(context: Context, empty: Boolean): Boolean {
         return try {
-            val intent = Intent(Intent.ACTION_VIEW)
-            intent.component = ComponentName(DOCSUI_PACKAGE, FILES_ACTIVITY)
-            intent.putExtra(EXTRA_OPEN_TRASH, true)
-            if (empty) {
-                intent.putExtra(EXTRA_EMPTY_TRASH, true)
+            // val intent = Intent(Intent.ACTION_VIEW)
+            // intent.component = ComponentName(DOCSUI_PACKAGE, FILES_ACTIVITY)
+            // intent.putExtra(EXTRA_OPEN_TRASH, true)
+            // if (empty) {
+            //     intent.putExtra(EXTRA_EMPTY_TRASH, true)
+            // }
+            // // 兼容未打补丁的 DocumentsUI
+            // buildTrashStack(context)?.let { intent.putExtra(EXTRA_STACK, it) }
+            // intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            // context.startActivity(intent)
+            val intent = Intent().apply {
+                component = ComponentName(
+                    "com.android.documentsui",
+                    "com.android.documentsui.files.EmptyTrashActivity"
+                )
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
-            // 兼容未打补丁的 DocumentsUI
-            buildTrashStack(context)?.let { intent.putExtra(EXTRA_STACK, it) }
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            context.startActivity(intent)
+
+            val options = ActivityOptions.makeCustomAnimation(
+                context,android.R.anim.fade_in, android.R.anim.fade_out
+            )
+            context.startActivity(intent, options.toBundle())
             Log.d(TAG, "launchTrash success empty=$empty")
             true
         } catch (t: Throwable) {
