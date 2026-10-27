@@ -22,11 +22,21 @@ constructor(
     var overviewWindow: AppOverviewWindow ?= null
     private val DEFAULT_TRIGGER_DISTANCE: Int = 20 // 触发翻页的默认距离（像素）
     private val mTriggerDistance = DEFAULT_TRIGGER_DISTANCE
+    // 一个最小滚轮刻度经 hwcomposer 合成后约 60px 的竖直位移
+    // （证据：一次最小刻度 Y 由 675 降到 615，共 60px）。
+    // 每累计约一个刻度的位移翻一页；位移成倍增大时按比例翻更多页，
+    // 而不是“每个手势最多只翻一页”（那会把大距离滚动也限制成一页）。
+    private val PAGE_TURN_DISTANCE: Float = 60f
     private var mStartX = 0f
     private var mStartY = 0f
     private var mMenuVisibleOnDown = false
     private val MENU_DISMISS_GRACE_MS = 300L
     private var mIsHorizontalScroll = false
+    // 本手势累计竖直位移、已翻页数（onInterceptTouchEvent 与 OnTouchListener 共享）
+    private var mGestureDy = 0f
+    private var mPagesTurnedInGesture = 0
+    private var mLastGestureY = 0f
+    private var mLastGestureEventTime = 0L
     val TAG = "LoadedViewPager"
     var blockScroll : Boolean = false
     var mIsTouching : Boolean = false
@@ -51,6 +61,49 @@ constructor(
         }
     }
 
+    // 依据累计竖直位移计算目标翻页数：
+    // 不足 mTriggerDistance 不翻页；约一个滚轮刻度（PAGE_TURN_DISTANCE）翻 1 页；
+    // 位移成倍增大时翻页数同比例增大（滚动越远翻得越多，不再固定为一页）。
+    private fun targetPageCount(dy: Float): Int {
+        if (abs(dy) < mTriggerDistance) {
+            return 0
+        }
+        return max(1, Math.round(abs(dy) / PAGE_TURN_DISTANCE))
+    }
+
+    private fun resetGesture() {
+        mGestureDy = 0f
+        mPagesTurnedInGesture = 0
+        mLastGestureY = 0f
+        mLastGestureEventTime = 0L
+    }
+
+    // onInterceptTouchEvent 与 OnTouchListener 都会收到同一批 MOVE；
+    // 用 eventTime 去重，保证同一段位移只累计、只翻页一次，
+    // 避免出现修复前两条路径各自翻页的情况。
+    private fun trackGestureMove(ev: MotionEvent) {
+        if (ev.eventTime == mLastGestureEventTime) {
+            return
+        }
+        mLastGestureEventTime = ev.eventTime
+        mGestureDy += ev.y - mLastGestureY
+        mLastGestureY = ev.y
+        // 横向漂移超过触摸抖动容差时按横向滚动处理，不触发翻页
+        if (abs(ev.x - mStartX) > ViewConfiguration.get(context).scaledTouchSlop) {
+            return
+        }
+        val target = targetPageCount(mGestureDy)
+        while (mPagesTurnedInGesture < target) {
+            // 竖直位移为负（手指/合成触点向上滑）→ 下一页
+            if (mGestureDy < 0) {
+                goToNextPage()
+            } else {
+                goToPreviousPage()
+            }
+            mPagesTurnedInGesture++
+        }
+    }
+
     private var lastInterceptX : Float = -1f
     private var lastInterceptY : Float = -1f
 
@@ -69,27 +122,13 @@ constructor(
                                 SystemClock.uptimeMillis() - ctx.dismissTime < MENU_DISMISS_GRACE_MS))
                 lastInterceptX = -1f
                 lastInterceptY = -1f
+                resetGesture()
+                mLastGestureY = ev!!.y
             }
             MotionEvent.ACTION_MOVE -> {
-                if(blockScroll){
-                    lastInterceptX = -1f
-                    lastInterceptY = -1f
-                    blockScroll = false
-                } else if(lastInterceptX == -1f){
-                    lastInterceptX = ev!!.x
-                    lastInterceptY = ev!!.y
-                } else {
-                    if(lastInterceptX == ev!!.x ){
-                        lastInterceptX = -1f
-                        if(lastInterceptY > ev!!.y){
-                            goToNextPage()
-                        } else {
-                            goToPreviousPage()
-                        }
-                        blockScroll = true
-                        lastInterceptY = -1f
-                    }
-                }
+                lastInterceptX = -1f
+                lastInterceptY = -1f
+                trackGestureMove(ev!!)
 
                 val dx = Math.abs(ev!!.x - mStartX)
                 val dy = Math.abs(ev!!.y - mStartY)
@@ -106,6 +145,7 @@ constructor(
                 }
                 lastInterceptX = -1f
                 lastInterceptY = -1f
+                resetGesture()
             }
         }
 
@@ -127,21 +167,15 @@ constructor(
                 mStartX = event.x
                 mStartY = event.y
                 mIsHorizontalScroll = false
+                resetGesture()
+                mLastGestureY = event.y
             }
 
             MotionEvent.ACTION_MOVE ->  {
                 val dx = (event.x - mStartX).toDouble().toFloat()
                 val dy = (event.y - mStartY).toDouble().toFloat()
-//                mIsHorizontalScroll = dx > dy && dx > ViewConfiguration.get(context).scaledTouchSlop
                 Log.d(TAG, "handleTouchEvent: dx:$dx dy:$dy $blockScroll")
-                if(!blockScroll ) {
-                    blockScroll = true
-                    if(dx < 0){
-                        goToNextPage()
-                    } else {
-                        goToPreviousPage()
-                    }
-                }
+                trackGestureMove(event)
             }
 
             MotionEvent.ACTION_UP ->
@@ -151,19 +185,7 @@ constructor(
                 mIsTouching = false
                 val dx = event.x - mStartX
                 Log.d(TAG, "handleTouchEvent() called with: dx = $dx")
-                if (abs(dx.toDouble()) > mTriggerDistance) {
-//                    val current = currentItem
-//                    val next = if (dx > 0) current - 1 else current + 1
-//
-//                    val toIndex = max(0.0, min(next.toDouble(), (adapter!!.count - 1).toDouble()))
-//                        .toInt()
-//                    setCurrentItem(
-//                        toIndex, true
-//                    )
-//                    return true // 已处理滑动
-//                }
-                }
-
+                resetGesture()
             }
         }
         return super.onTouchEvent(event)
