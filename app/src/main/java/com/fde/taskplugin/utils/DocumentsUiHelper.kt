@@ -49,22 +49,7 @@ object DocumentsUiHelper {
 
     /** 打开回收站并触发清空流程（DocumentsUI 会弹确认框）。 */
     fun emptyTrash(context: Context): Boolean {
-        return launchTrash(context, empty = true)
-    }
-
-    private fun launchTrash(context: Context, empty: Boolean): Boolean {
-        return try {
-            // val intent = Intent(Intent.ACTION_VIEW)
-            // intent.component = ComponentName(DOCSUI_PACKAGE, FILES_ACTIVITY)
-            // intent.putExtra(EXTRA_OPEN_TRASH, true)
-            // if (empty) {
-            //     intent.putExtra(EXTRA_EMPTY_TRASH, true)
-            // }
-            // // 兼容未打补丁的 DocumentsUI
-            // buildTrashStack(context)?.let { intent.putExtra(EXTRA_STACK, it) }
-            // intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            // context.startActivity(intent)
-            val intent = Intent().apply {
+        val intent = Intent().apply {
                 component = ComponentName(
                     "com.android.documentsui",
                     "com.android.documentsui.files.EmptyTrashActivity"
@@ -72,10 +57,26 @@ object DocumentsUiHelper {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             }
 
-            val options = ActivityOptions.makeCustomAnimation(
-                context,android.R.anim.fade_in, android.R.anim.fade_out
-            )
-            context.startActivity(intent, options.toBundle())
+        val options = ActivityOptions.makeCustomAnimation(
+            context,android.R.anim.fade_in, android.R.anim.fade_out
+        )
+        context.startActivity(intent, options.toBundle())
+        return true;
+    }
+
+    private fun launchTrash(context: Context, empty: Boolean): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_VIEW)
+            intent.component = ComponentName(DOCSUI_PACKAGE, FILES_ACTIVITY)
+            intent.putExtra(EXTRA_OPEN_TRASH, true)
+            if (empty) {
+                intent.putExtra(EXTRA_EMPTY_TRASH, true)
+            }
+            // 兼容未打补丁的 DocumentsUI
+            buildTrashStack(context)?.let { intent.putExtra(EXTRA_STACK, it) }
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            context.startActivity(intent)
+            
             Log.d(TAG, "launchTrash success empty=$empty")
             true
         } catch (t: Throwable) {
