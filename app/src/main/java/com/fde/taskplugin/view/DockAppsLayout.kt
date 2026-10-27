@@ -99,6 +99,7 @@ constructor(
 
     private var itemDecoration: DockAppItemDecoration? = null
     var appOverviewWindow: AppOverviewWindow ?= null
+    private var emptyTrashDialog: EmptyTrashDialog? = null
     private var lastDockBoundsSignature: String? = null
     private var lastReportedDisplayId = Display.DEFAULT_DISPLAY
     private var dockBoundsReportRetries = 0
@@ -590,9 +591,17 @@ constructor(
 
     private fun emptyTrash() {
         if (DocumentsUiHelper.emptyTrash(context)) {
-            return
+            return ;
         }
         openTrash()
+
+        // // 本应用内弹出"是否清空回收站"确认 Dialog，不再打开 DocumentsUI
+        // // （也不弹它自己的 EmptyTrashActivity 确认框）。
+        // if (emptyTrashDialog == null) {
+        //     emptyTrashDialog = EmptyTrashDialog(context)
+        // }
+        // emptyTrashDialog?.showEmptyTrashDialog()
+        Log.d(TAG, "emptyTrash: show in-app confirm dialog")
     }
 
     /**
@@ -894,6 +903,7 @@ constructor(
     fun dismissAllPopups() {
         dismissTaskPreview()
         appOverviewWindow?.dismiss()
+        emptyTrashDialog?.dismiss()
         dockAppAdapter?.dismissContextWindow()
     }
 
@@ -1152,6 +1162,7 @@ constructor(
         Log.d(TAG, "$this onDestroy() $globalSearchRecevier")
         dismissTaskPreview()
         appOverviewWindow?.dismiss()
+        emptyTrashDialog?.dismiss()
         globalSearchRecevier?.also { receiver ->
             context.unregisterReceiver(receiver)
             globalSearchRecevier = null

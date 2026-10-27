@@ -22,6 +22,9 @@
     <string name="open">打开</string>
     <string name="recents">最近任务</string>
     <string name="empty_trash">清空回收站</string>
+    <string name="empty_trash_dialog_title">是否清空回收站？</string>
+    <string name="empty_trash_dialog_message">回收站中的所有项目将被永久删除，此操作无法恢复。</string>
+    <string name="empty_trash_dialog_confirm">永久删除</string>
     <string name="todesk">创建桌面快捷方式</string>
     <string name="close">关闭窗口</string>
     <string name="close_wifi">关闭</string>

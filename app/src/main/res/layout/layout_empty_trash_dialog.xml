@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="360dp"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:background="@drawable/bg_empty_trash_dialog"
+    android:elevation="24dp"
+    android:padding="20dp">
+
+    <TextView
+        android:id="@+id/empty_trash_dialog_title"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="12dp"
+        android:gravity="center"
+        android:text="@string/empty_trash_dialog_title"
+        android:textColor="@color/notification_text_color"
+        android:textSize="18sp"
+        android:textStyle="bold" />
+
+    <TextView
+        android:id="@+id/empty_trash_dialog_message"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:paddingBottom="24dp"
+        android:gravity="center"
+        android:lineSpacingExtra="4dp"
+        android:text="@string/empty_trash_dialog_message"
+        android:textColor="@color/app_gray_dark"
+        android:textSize="14sp" />
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center">
+
+        <TextView
+            android:id="@+id/empty_trash_dialog_cancel"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginEnd="10dp"
+            android:background="@drawable/bg_empty_trash_btn_cancel"
+            android:gravity="center"
+            android:text="@string/fde_btn_cancel"
+            android:textColor="@color/app_gray_dark"
+            android:textSize="15sp" />
+
+        <TextView
+            android:id="@+id/empty_trash_dialog_delete"
+            android:layout_width="0dp"
+            android:layout_height="40dp"
+            android:layout_weight="1"
+            android:layout_marginStart="10dp"
+            android:background="@drawable/bg_empty_trash_btn_delete"
+            android:gravity="center"
+            android:text="@string/empty_trash_dialog_confirm"
+            android:textColor="@color/white"
+            android:textSize="15sp" />
+    </LinearLayout>
+
+</LinearLayout>
