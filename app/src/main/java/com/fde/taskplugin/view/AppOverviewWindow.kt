@@ -61,6 +61,11 @@ class AppOverviewWindow(
     var contextWindow: AbsTopPopWindow ?= null
     var focusView: View ?= null
     private var dismissing = false
+    /**
+     * Only the primary display's overview participates in the launcher's APP_OVERVIEW state.
+     * A secondary overview must not hide the primary desktop icons.
+     */
+    private var overlayVisibleNotified = false
     private var contentAnimator: AnimatorSet? = null
     // Material Motion emphasized easing, matching the launcher popup animations.
     private val emphasizedDecelerate = PathInterpolator(0.05f, 0.7f, 0.1f, 1f)
@@ -113,10 +118,17 @@ class AppOverviewWindow(
         private const val EXIT_FADE_START_DELAY = 80L
     }
 
+    private fun isPrimaryDisplay(): Boolean {
+        return displayId == android.view.Display.DEFAULT_DISPLAY
+    }
+
     override fun showPopupWindow() {
         dismissing = false
         super.showPopupWindow()
-        Utils.notifyOverlayVisible(getContext(), true)
+        if (isPrimaryDisplay()) {
+            overlayVisibleNotified = true
+            Utils.notifyOverlayVisible(getContext(), true)
+        }
         ImageUtils.set("fde.click_as_touch", "true")
         initViews()
         playEnterAnimation()
@@ -413,7 +425,10 @@ class AppOverviewWindow(
 
     fun destroy(){
         super.dismiss()
-        Utils.notifyOverlayVisible(getContext(), false)
+        if (overlayVisibleNotified) {
+            overlayVisibleNotified = false
+            Utils.notifyOverlayVisible(getContext(), false)
+        }
         filterApps(null, 0)
         focusView = null
         contextWindow?.dismissImmediately()
@@ -447,12 +462,13 @@ class AppOverviewWindow(
     private fun calculateRowsPerPage(
         availableHeight: Int,
         itemHeight: Int,
-        minRowSpacing: Int
+        minRowSpacing: Int,
+        tolerance: Int = 0,
     ): Int {
-        var rows = max(1, availableHeight / max(1, itemHeight))
+        var rows = max(1, (availableHeight + tolerance) / max(1, itemHeight))
         while (rows > 1) {
             val requiredHeight = rows * itemHeight + (rows - 1) * minRowSpacing
-            if (requiredHeight <= availableHeight) {
+            if (requiredHeight <= availableHeight + tolerance) {
                 break
             }
             rows--
@@ -469,7 +485,12 @@ class AppOverviewWindow(
         if (rows <= 1) {
             return 0
         }
-        val remainingHeight = max(0, availableHeight - rows * itemHeight)
+        val remainingHeight = availableHeight - rows * itemHeight
+        if (remainingHeight <= 0) {
+            // Slightly over-full page (a few px); let rows touch rather than shifting them
+            // outside the content area.
+            return 0
+        }
         return max(minRowSpacing, remainingHeight / (rows - 1))
     }
 
@@ -486,9 +507,28 @@ class AppOverviewWindow(
         val minRowSpacing =
             getContext().resources.getDimensionPixelSize(R.dimen.overview_row_spacing_min)
         val availableHeight = max(0, screenHeight - topInset - bottomInset)
-        div = calculateRowsPerPage(availableHeight, itemHeight, minRowSpacing)
-        rowSpacingPx = calculateRowSpacing(availableHeight, itemHeight, div, minRowSpacing)
-        Log.d(TAG, "updateGridMetrics: $topInset $bottomInset $screenHeight $itemHeight $div $rowSpacingPx")
+        // The original 190dp item only fits two rows on the secondary HDMI density. Allow a
+        // small tolerance (5% of one item) on secondary displays so a row that overflows by
+        // only a few pixels still counts; primary keeps its original exact row count.
+        val displayId = getContext().display?.displayId
+            ?: android.view.Display.DEFAULT_DISPLAY
+        val tolerance = if (displayId != android.view.Display.DEFAULT_DISPLAY) {
+            max(1, itemHeight / 20)
+        } else {
+            0
+        }
+        div = calculateRowsPerPage(availableHeight, itemHeight, minRowSpacing, tolerance)
+        rowSpacingPx = calculateRowSpacing(
+            availableHeight,
+            itemHeight,
+            div,
+            minRowSpacing,
+        )
+        Log.d(
+            TAG,
+            "updateGridMetrics: $topInset $bottomInset $screenHeight $itemHeight " +
+                "$div $rowSpacingPx",
+        )
     }
 
     private fun getOverviewContentBottomInset(): Int {

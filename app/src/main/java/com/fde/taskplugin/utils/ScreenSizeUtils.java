@@ -4,6 +4,8 @@ import android.content.Context;
 import android.content.res.Configuration;
 import android.util.DisplayMetrics;
 import android.util.Log;
+import android.util.SparseArray;
+import android.view.Display;
 import android.view.WindowManager;
 
 /**
@@ -11,13 +13,17 @@ import android.view.WindowManager;
  *
  * <p>系统“显示大小”（density）、“字体大小”（fontScale）或分辨率变化后，调用
  * {@link #refresh(Context)} 重新读取当前配置，再配合各监听器重建界面即可运行时适配。
+ *
+ * <p>FDE multi-display: taskbar instances are created per display, so this cache is keyed by
+ * display id. Always pass the display/window context of the taskbar instance; do not use the
+ * application context here, otherwise every instance would report the default display metrics.
  */
 public class ScreenSizeUtils {
     private static final String TAG = "ScreenSizeUtils";
     private static final int DEFAULT_WIDTH = 1920;
     private static final int DEFAULT_HEIGHT = 1080;
 
-    private static volatile ScreenSizeUtils instance = null;
+    private static final SparseArray<ScreenSizeUtils> INSTANCES = new SparseArray<>();
 
     private int screenWidth = 0;
     private int screenHeight = 0;
@@ -27,14 +33,33 @@ public class ScreenSizeUtils {
     private int densityDpi = DisplayMetrics.DENSITY_DEFAULT;
 
     public static ScreenSizeUtils getInstance(Context mContext) {
+        final int displayId = getDisplayId(mContext);
+        ScreenSizeUtils instance = INSTANCES.get(displayId);
         if (instance == null) {
             synchronized (ScreenSizeUtils.class) {
+                instance = INSTANCES.get(displayId);
                 if (instance == null) {
                     instance = new ScreenSizeUtils(mContext);
+                    INSTANCES.put(displayId, instance);
                 }
             }
         }
         return instance;
+    }
+
+    private static int getDisplayId(Context context) {
+        if (context == null) {
+            return Display.DEFAULT_DISPLAY;
+        }
+        try {
+            final Display display = context.getDisplay();
+            if (display != null) {
+                return display.getDisplayId();
+            }
+        } catch (Throwable t) {
+            Log.w(TAG, "getDisplayId failed: " + t.getMessage());
+        }
+        return Display.DEFAULT_DISPLAY;
     }
 
     private ScreenSizeUtils(Context mContext) {
@@ -50,24 +75,24 @@ public class ScreenSizeUtils {
         if (context == null) {
             return;
         }
-        Context appContext = context.getApplicationContext() != null
-                ? context.getApplicationContext() : context;
         int realWidthPx = 0;
         int realHeightPx = 0;
         try {
-            DisplayMetrics dm = appContext.getResources().getDisplayMetrics();
+            // Use the supplied (display/window) context, not getApplicationContext(): the latter
+            // always resolves to the default display.
+            DisplayMetrics dm = context.getResources().getDisplayMetrics();
             if (dm.density > 0) {
                 density = dm.density;
             }
             if (dm.densityDpi > 0) {
                 densityDpi = dm.densityDpi;
             }
-            Configuration configuration = appContext.getResources().getConfiguration();
+            Configuration configuration = context.getResources().getConfiguration();
             fontScale = configuration.fontScale > 0 ? configuration.fontScale : 1f;
             scaledDensity = dm.scaledDensity > 0 ? dm.scaledDensity : density * fontScale;
 
             WindowManager manager =
-                    (WindowManager) appContext.getSystemService(Context.WINDOW_SERVICE);
+                    (WindowManager) context.getSystemService(Context.WINDOW_SERVICE);
             if (manager != null) {
                 DisplayMetrics realDm = new DisplayMetrics();
                 manager.getDefaultDisplay().getRealMetrics(realDm);
@@ -93,8 +118,8 @@ public class ScreenSizeUtils {
             screenWidth = DEFAULT_WIDTH;
             screenHeight = DEFAULT_HEIGHT;
         }
-        Log.d(TAG, "update: real=" + realWidthPx + "x" + realHeightPx
-                + " property=" + propertyWidth + "x" + propertyHeight
+        Log.d(TAG, "update(display=" + getDisplayId(context) + "): real=" + realWidthPx + "x"
+                + realHeightPx + " property=" + propertyWidth + "x" + propertyHeight
                 + " -> " + screenWidth + "x" + screenHeight
                 + " density=" + density + " densityDpi=" + densityDpi
                 + " fontScale=" + fontScale);

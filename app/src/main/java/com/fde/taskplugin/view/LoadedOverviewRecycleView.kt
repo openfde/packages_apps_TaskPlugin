@@ -42,6 +42,7 @@ import com.fde.taskplugin.data.AppData
 import com.fde.taskplugin.data.DockContext
 import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.ImageUtils
+import com.fde.taskplugin.utils.LaunchUtils
 import com.fde.taskplugin.utils.Utils
 import com.bumptech.glide.Glide
 
@@ -225,7 +226,7 @@ constructor(
                     val intent = Intent()
                     intent.component = appData?.componentName
                     intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
+                    LaunchUtils.launch(context, intent)
                 }
             } catch (e: ActivityNotFoundException) {
                 Log.e(TAG, "shouldStartApp: ${e.message}")
