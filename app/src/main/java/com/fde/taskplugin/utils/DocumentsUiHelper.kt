@@ -1,9 +1,11 @@
 package com.fde.taskplugin.utils
 
+import android.app.ActivityManager
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.os.Parcelable
+import android.provider.Settings
 import android.util.Log
 import android.app.ActivityOptions;
 
@@ -28,6 +30,11 @@ object DocumentsUiHelper {
     private const val TRASH_ROOT_ID = "trash_root"
     private const val TRASH_STRING = "root_trash"
 
+    // 与 packages_apps_documentsui base/Shared#SETTINGS_TRASH_PAGE_OPEN 对应：
+    // DocumentsUI 在进入/离开回收站页面时上报该值，用来区分"回收站已打开"还是"没打开"。
+    private const val KEY_TRASH_PAGE_OPEN = "documentsui_trash_page_open"
+    private const val MAX_RUNNING_TASKS = 20
+
     // android.provider.DocumentsContract.Root
     private const val FLAG_LOCAL_ONLY = 1
     private const val FLAG_SUPPORTS_IS_CHILD = 1 shl 4
@@ -42,9 +49,60 @@ object DocumentsUiHelper {
         }
     }
 
-    /** 打开回收站页面。 */
+    /**
+     * 打开回收站页面。
+     *
+     * - 回收站已经打开（DocumentsUI 侧会上报 [KEY_TRASH_PAGE_OPEN]）→ 只把现有窗口
+     *   放到顶层显示，不再新开一个 DocumentsUI 窗口；
+     * - 否则按原来的方式新开回收站页面。
+     */
     fun openTrash(context: Context): Boolean {
+        if (bringOpenTrashToFront(context)) {
+            Log.d(TAG, "trash page already open, brought it to the front")
+            return true
+        }
         return launchTrash(context, empty = false)
+    }
+
+    /**
+     * 回收站页面已经打开时把它带到前台。返回 true 表示已处理（包括它已经在顶层）；
+     * 返回 false 表示回收站并未打开（或对应窗口已不存在），需要调用方新开。
+     */
+    private fun bringOpenTrashToFront(context: Context): Boolean {
+        val trashOpen =
+            Settings.System.getInt(context.contentResolver, KEY_TRASH_PAGE_OPEN, 0) == 1
+        if (!trashOpen) {
+            return false
+        }
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager
+            ?: return false
+        val target = am.getRunningTasks(MAX_RUNNING_TASKS)
+            ?.firstOrNull { isTrashFilesTask(it) }
+            ?: return false
+
+        Log.d(TAG, "trash task found, taskId=${target.taskId} focused=${target.isFocused}")
+        if (target.isFocused) {
+            // 已经在顶层，无需重复动作。
+            return true
+        }
+        // 桌面模式下优先走 Shell 恢复（含从 MinimizedDesk 反最小化），否则普通置顶。
+        val moved = try {
+            am.moveTaskToFront(target.taskId, ActivityManager.MOVE_TASK_NO_USER_ACTION)
+            true
+        } catch (t: Throwable) {
+            Log.w(TAG, "moveTaskToFront failed", t)
+            false
+        }
+        val broughtFront = HostDesktopMode.showTask(target.taskId) || moved
+        return broughtFront
+    }
+
+    private fun isTrashFilesTask(info: ActivityManager.RunningTaskInfo): Boolean {
+        val top = info.topActivity ?: return false
+        val base = info.baseActivity ?: return false
+        return DOCSUI_PACKAGE == top.packageName
+            && DOCSUI_PACKAGE == base.packageName
+            && FILES_ACTIVITY == top.className
     }
 
     /** 打开回收站并触发清空流程（DocumentsUI 会弹确认框）。 */
