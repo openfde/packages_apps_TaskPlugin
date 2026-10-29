@@ -10,6 +10,7 @@ import android.graphics.Bitmap
 import android.graphics.Canvas
 import android.graphics.Outline
 import android.graphics.PixelFormat
+import android.hardware.display.DisplayManager
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
@@ -82,6 +83,11 @@ open class AbsTopPopWindow(
     /** 最近一次 dismiss/dismissImmediately 的时间（uptimeMillis），用于判断"刚刚被点外面关掉"。 */
     var dismissTime = 0L
     private var windowManager: WindowManager? = null
+    /**
+     * Display that owns this popup window. The taskbar on display 2 must not let its overview
+     * window fall back to the default display when the base Context is ambiguous.
+     */
+    var displayId: Int = Display.DEFAULT_DISPLAY
     protected var mContentView: View? = null
     protected var provider: ViewOutlineProvider? = null
     protected var enter: ObjectAnimator? = null
@@ -99,7 +105,7 @@ open class AbsTopPopWindow(
         shown = true
         Log.d(TAG, "showPopupWindow: ${mContentView?.isAttachedToWindow} $this isshowing: ${isShowing()}")
         if (mContentView == null || mContentView?.isAttachedToWindow == false) {
-            windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+            windowManager = resolveWindowManager()
             mContentView = LayoutInflater.from(context).inflate(layoutResId, null)
             mContentView?.isFocusable = true
             mContentView?.isFocusableInTouchMode = true
@@ -139,6 +145,22 @@ open class AbsTopPopWindow(
 
     fun getContext(): Context{
         return context
+    }
+
+    private fun resolveWindowManager(): WindowManager {
+        if (displayId != Display.DEFAULT_DISPLAY) {
+            try {
+                val dm = context.getSystemService(Context.DISPLAY_SERVICE) as DisplayManager
+                val display = dm.getDisplay(displayId)
+                if (display != null) {
+                    val displayContext = context.createDisplayContext(display)
+                    return displayContext.getSystemService(Context.WINDOW_SERVICE) as WindowManager
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "resolveWindowManager failed for display $displayId", t)
+            }
+        }
+        return context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
     }
 
     fun removeViews() {

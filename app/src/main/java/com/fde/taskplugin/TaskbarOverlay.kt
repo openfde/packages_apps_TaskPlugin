@@ -1,21 +1,22 @@
 package com.fde.taskplugin
 
-import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
 import android.content.ContentResolver
 import android.content.Context
 import android.content.Context.RECEIVER_EXPORTED
+import android.content.Context.RECEIVER_NOT_EXPORTED
+import android.content.ContextWrapper
 import android.content.Intent
 import android.content.IntentFilter
 import android.database.ContentObserver
 import android.graphics.Color
-import android.net.ConnectivityManager
 import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import android.util.AttributeSet
 import android.util.Log
+import android.util.SparseArray
 import android.view.Display
 import android.view.Gravity
 import android.view.LayoutInflater
@@ -23,26 +24,29 @@ import android.view.View
 import android.view.ViewGroup
 import android.widget.FrameLayout
 import androidx.cardview.widget.CardView
-import androidx.core.view.postDelayed
 import com.android.systemui.plugins.TaskbarPlugin
 import com.android.systemui.plugins.annotations.Requires
 import com.fde.taskplugin.provider.AllAppsProvider
+import com.fde.taskplugin.provider.DockAppsProvider.Companion.ACTION_DOCK_STATE_CHANGED
 import com.fde.taskplugin.receiver.UninstallReceiver
 import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.SPUtils
 import com.fde.taskplugin.utils.ScreenSizeUtils
 import com.fde.taskplugin.utils.Utils
-import com.fde.taskplugin.utils.ViewTreePrinter
 import com.fde.taskplugin.view.DockAppsLayout
-import com.fde.taskplugin.view.DockIconView.Companion.RELEASE_DURATION
 import kotlinx.coroutines.Runnable
 
 /**
  * A minimal custom taskbar plugin that replaces the default launcher taskbar content
  * with a plugin-provided layout.
+ *
+ * <p>FDE multi-display: the Launcher host calls [setup] once per display and on every taskbar
+ * recreation. This plugin keeps one [TaskbarInstance] per display, but all instances read the
+ * same global task list. The taskbar on each display therefore shows all windows; launching a
+ * new app targets the display that owns the clicked taskbar.
  */
 @Requires(target = TaskbarPlugin::class, version = TaskbarPlugin.VERSION)
-class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
+class TaskbarOverlay : TaskbarPlugin, UninstallReceiver.AppUninstallListener {
 
     companion object {
         /** FDE 设置-显示-字体大小对应 Settings.System 的 key（0.85 / 1.0 / 1.15 / 1.3 / 1.5 / 1.8 / 2.0） */
@@ -66,24 +70,19 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
     private var pluginContext: Context? = null
     private var hostContext: Context? = null
 
-    private var dockAppsGroup: ViewGroup? = null
-    private var dockAppsLayout: DockAppsLayout? = null
-    private var navi: ViewGroup ?= null
-    private var mDockScaleFactor = DEFAULT_DOCK_SCALE
+    /** displayId -> taskbar instance. One taskbar window exists per display. */
+    private val taskbarInstances = SparseArray<TaskbarInstance>()
     private val classLoader = TaskbarOverlay::class.java.classLoader
-    private var overviewProvider: AllAppsProvider?= null
-    var receiver :BroadcastReceiver?= null
+    private var receiver: BroadcastReceiver? = null
     var resolver: ContentResolver? = null
+    private var dockStateReceiver: BroadcastReceiver? = null
 
-    // 系统 size/density/字体缩放变化的监听与去抖
+    // 系统 size/density/字体缩放变化的监听与去抖（全局共享，通知所有 display 实例）
     private val configHandler = Handler(Looper.getMainLooper())
     private var configObserver: ContentObserver? = null
     private var trashObserver: ContentObserver? = null
     private var configChangeReceiver: BroadcastReceiver? = null
     private val configChangeRunnable = Runnable { onDisplayConfigChanged() }
-    private var lastDensityDpi = -1
-    private var lastFontScale = -1f
-
 
     override fun onCreate(hostContext: Context, pluginContext: Context) {
         this.pluginContext = pluginContext
@@ -93,25 +92,36 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         // 必须用宿主 launcher 的 application context：SystemUiProxy 单例依赖
         // LauncherApplication.appComponent，插件自己的 context 没有 application。
         HostDesktopMode.init(hostContext)
-        loadCustomViewsWithInflater(pluginContext!!)
-        mDockScaleFactor = readDockScale()
-        ScreenSizeUtils.getInstance(pluginContext!!).let {
-            it.refresh(pluginContext!!)
-            lastDensityDpi = it.densityDpi
-            lastFontScale = it.fontScale
-        }
-
-        dockAppsGroup = initializeDockAppsGroup(this.pluginContext, dockAppsGroup)
-        dockAppsLayout = dockAppsGroup?.findViewById(R.id.apps_rv)
-        dockAppsGroup?.defaultFocusHighlightEnabled = false
-        dockAppsLayout!!.reloadActivityManager(pluginContext)
-        overviewProvider = AllAppsProvider(pluginContext!!, dockAppsLayout)
-        dockAppsLayout?.overviewProvider = overviewProvider
-
-        Utils.getLinuxRootFileName(hostContext!!)
+        Utils.getLinuxRootFileName(hostContext)
         registerDisplayConfigListeners()
         registerAll()
+    }
 
+    /**
+     * Host entry point. Launcher calls this once for every display and again whenever it
+     * recreates a taskbar (density/font-scale/display changes). The same display therefore
+     * reuses its [TaskbarInstance] and only rebinds the new root view.
+     */
+    override fun setup(taskbarRoot: ViewGroup) {
+        if (pluginContext == null) {
+            return
+        }
+        val displayId = resolveDisplayId(taskbarRoot)
+        val instance = taskbarInstances.get(displayId)
+            ?: TaskbarInstance(displayId).also { taskbarInstances.put(displayId, it) }
+        instance.bind(taskbarRoot)
+    }
+
+    /** Host is tearing down all taskbars: release every display instance and its popups. */
+    override fun teardown() {
+        destroyAllInstances()
+    }
+
+    private fun destroyAllInstances() {
+        for (i in taskbarInstances.size() - 1 downTo 0) {
+            taskbarInstances.valueAt(i).destroy()
+        }
+        taskbarInstances.clear()
     }
 
     private fun registerAll() {
@@ -119,6 +129,25 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         val filter = IntentFilter()
         filter.addAction(Intent.ACTION_CLOSE_SYSTEM_DIALOGS)
         hostContext!!.registerReceiver(closeSystemDialogsReceiver, filter, RECEIVER_EXPORTED)
+
+        // Every display has its own DockAppsProvider. Refresh all of them when one taskbar
+        // pins/unpins/reorders an app so all taskbars stay in sync.
+        dockStateReceiver = object : BroadcastReceiver() {
+            override fun onReceive(context: Context?, intent: Intent?) {
+                if (intent?.action != ACTION_DOCK_STATE_CHANGED) {
+                    return
+                }
+                for (i in 0 until taskbarInstances.size()) {
+                    taskbarInstances.valueAt(i).refreshDockState()
+                }
+            }
+        }
+        hostContext!!.registerReceiver(
+            dockStateReceiver,
+            IntentFilter(ACTION_DOCK_STATE_CHANGED),
+            RECEIVER_NOT_EXPORTED,
+        )
+
         registPackageUpdate()
     }
 
@@ -132,8 +161,8 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
                 if (Intent.ACTION_CLOSE_SYSTEM_DIALOGS != intent.action) {
                     return
                 }
-                if(dockAppsLayout != null){
-                    dockAppsLayout?.dimissWindow()
+                for (i in 0 until taskbarInstances.size()) {
+                    taskbarInstances.valueAt(i).dismissPopups()
                 }
             }
         }
@@ -149,83 +178,13 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         pluginContext?.registerReceiver(receiver, filter)
     }
 
-
     override fun onUninstall(packageName: String) {
-        dockAppsLayout?.onUninstall(packageName)
+        for (i in 0 until taskbarInstances.size()) {
+            taskbarInstances.valueAt(i).onUninstall(packageName)
+        }
     }
 
     override fun onInstall(packageName: String?) {
-
-    }
-
-    private fun loadCustomViewsWithInflater(context: Context) {
-        if (context == null) {
-            throw IllegalArgumentException("Context cannot be null")
-        }
-        val inflater = LayoutInflater.from(context)
-        inflater.factory2 = object : LayoutInflater.Factory2 {
-            override fun onCreateView(
-                parent: View?,
-                name: String,
-                context: Context,
-                attrs: AttributeSet
-            ): View? {
-                return createCustomView(name, context, attrs)
-            }
-
-            override fun onCreateView(name: String, context: Context, attrs: AttributeSet): View? {
-                return createCustomView(name, context, attrs)
-            }
-
-            private fun createCustomView(name: String, context: Context, attrs: AttributeSet): View? {
-                try {
-                    if(name.contains(context.packageName)){
-                        val clazz =
-                            Class.forName(name, true, classLoader)
-                        return clazz.getConstructor(
-                            Context::class.java,
-                            AttributeSet::class.java
-                        )
-                            .newInstance(context, attrs) as View
-                    }
-                } catch (e: Exception) {
-                    return null
-                }
-                return null
-            }
-        }
-    }
-
-
-    override fun setup(taskbarRoot: ViewGroup) {
-        pluginContext ?: return
-        // 宿主会为每个 display 创建一个 taskbarRoot 并分别回调 setup()，
-        // 但本插件只有一个 dock 实例，只能挂到主显示（display 0）上。
-        // 否则第二个 display 回调时会把已经挂在 display 0 上的 dock 再次 addView，
-        // 触发 "The specified child already has a parent"。
-        val displayId = resolveDisplayId(taskbarRoot)
-        if (displayId != Display.DEFAULT_DISPLAY) {
-            Log.d(TAG, "setup() skip display $displayId, only display 0 is supported")
-            return
-        }
-        // taskbarRoot 现在是整个 taskbar 窗口根（全宽、70dp），插件直接往里面放 dock。
-        navi = taskbarRoot
-        navi!!.removeAllViews()
-        navi!!.visibility = View.VISIBLE
-        Log.d(TAG, "setup() called with: taskbarRoot = $taskbarRoot")
-        navi!!.postDelayed(100) {
-            ViewTreePrinter.printViewTree(navi!!)
-        }
-        // 宿主在 density/字体缩放等配置变化后可能重建 taskbar 并再次回调 setup，
-        // 这里对比快照，配置变化过就先重建 dock，让 dp/sp 按新配置解析。
-        val screen = ScreenSizeUtils.getInstance(pluginContext!!)
-        screen.refresh(pluginContext!!)
-        if (screen.densityDpi != lastDensityDpi || screen.fontScale != lastFontScale) {
-            lastDensityDpi = screen.densityDpi
-            lastFontScale = screen.fontScale
-            reinflateDock()
-        }
-        updateNaviDock()
     }
 
     /** setup() 传入的是某个 display 的 taskbar 根视图，这里取它所属的 displayId。 */
@@ -238,64 +197,6 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             Display.DEFAULT_DISPLAY
         }
     }
-
-    private fun updateNaviDock() {
-        val root = navi ?: return
-        root.removeAllViews()
-        // 宿主重建 taskbar（例如分辨率/显示配置变化后 recreateTaskbarForDisplay）时会带着
-        // 新的根视图再次回调 setup()。此时 dock 可能还挂在旧根视图上，
-        // 只清理新根视图是不够的，直接 addView 会抛
-        // "The specified child already has a parent"。
-        detachDockFromParent()
-        dockAppsLayout?.onDestroy()
-        mDockScaleFactor = readDockScale()
-        pluginContext?.let { ScreenSizeUtils.getInstance(it).refresh(it) }
-
-        // 窗口宽度/高度由 DockAppsLayout.updateNaviWidth 按当前 dock 缩放计算，
-        // 左右空白区域透传给下层应用；dock 内容以 WRAP_CONTENT 宽度、水平居中放进去。
-        val dockParams = FrameLayout.LayoutParams(
-            FrameLayout.LayoutParams.WRAP_CONTENT,
-            FrameLayout.LayoutParams.MATCH_PARENT,
-            Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM
-        )
-        val dock = dockAppsGroup ?: return
-        root.addView(dock, dockParams)
-        dockAppsLayout?.navi = root
-        dockAppsLayout?.initApps(mDockScaleFactor)
-        dockAppsGroup?.setOnClickListener{
-//            traverseAndPrint(navi!!, 0)
-            navi?.background = null
-            dockAppsLayout?.updateNaviWindowFlags()
-        }
-        val mainHandler = Handler(Looper.getMainLooper())
-        mainHandler.postDelayed({ dockAppsLayout?.updateNaviWindowFlags() }, 5000)
-        if(Utils.getProperty("fde.systemui.blurlevel", 0) == 0){
-//            Log.d(TAG, "updateNaviDock() called blur")
-            Utils.setBackgroundBlurRadius(dockAppsGroup?.findViewById(R.id.root_blur), 70, 16f)
-        } else {
-//            Log.d(TAG, "updateNaviDock() called not blur")
-            val bgViewGroup = dockAppsGroup?.findViewById<ViewGroup>(R.id.paren_fl)
-            bgViewGroup?.setBackgroundResource(R.drawable.round_rect_16dp_no_blur)
-            val cardView = dockAppsGroup?.findViewById<CardView>(R.id.root_blur)
-            cardView?.setCardBackgroundColor(Color.parseColor("#aaF2F6FA"))
-        }
-    }
-
-    /** dock 可能仍挂在旧 taskbar 根视图上，重新添加前先摘掉。 */
-    private fun detachDockFromParent() {
-        val dock = dockAppsGroup ?: return
-        (dock.parent as? ViewGroup)?.removeView(dock)
-    }
-
-    @SuppressLint("InflateParams")
-    private fun initializeDockAppsGroup(
-        context: Context?,
-        dockAppsGroup: ViewGroup?,
-    ): ViewGroup {
-        return dockAppsGroup
-            ?: LayoutInflater.from(context).inflate(R.layout.dock_apps_layout, null) as ViewGroup
-    }
-
 
     private fun readDockScale(): Float {
         val context = pluginContext ?: hostContext ?: return DEFAULT_DOCK_SCALE
@@ -357,7 +258,11 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             val observer = object : ContentObserver(configHandler) {
                 override fun onChange(selfChange: Boolean, uri: Uri?) {
                     Log.d(TAG, "trash storage changed: $uri")
-                    dockAppsLayout?.refreshTrashItem()
+                    // Refresh the trash item on every dock; each display has its own
+                    // DockAppsLayout instance.
+                    for (i in 0 until taskbarInstances.size()) {
+                        taskbarInstances.valueAt(i).refreshTrashItem()
+                    }
                 }
             }
             context.contentResolver.registerContentObserver(
@@ -371,43 +276,11 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
         configHandler.postDelayed(configChangeRunnable, CONFIG_CHANGE_DEBOUNCE_MS)
     }
 
-    /**
-     * 运行时适配：重新读取显示配置 -> 重建 dock（让 dp/sp 按新 density/fontScale 重新解析）
-     * -> 刷新 dock 窗口宽高。
-     */
     private fun onDisplayConfigChanged() {
-        val context = pluginContext ?: return
-        val screen = ScreenSizeUtils.getInstance(context)
-        screen.refresh(context)
-        mDockScaleFactor = readDockScale()
-        lastDensityDpi = screen.densityDpi
-        lastFontScale = screen.fontScale
-        Log.d(TAG, "onDisplayConfigChanged dockScale=$mDockScaleFactor" +
-                " screen=${screen.screenWidth}x${screen.screenHeight}" +
-                " density=${screen.density} densityDpi=${screen.densityDpi}" +
-                " fontScale=${screen.fontScale}")
-        reinflateDock()
-        updateNaviDock()
-    }
-
-    /** 重新 inflate dock，使 dp/sp 尺寸按当前 density/fontScale 重新解析，并清掉旧弹窗。 */
-    private fun reinflateDock() {
-        val context = pluginContext ?: return
-        dockAppsLayout?.dismissAllPopups()
-        dockAppsLayout?.onDestroy()
-        navi?.removeAllViews()
-        detachDockFromParent()
-        dockAppsGroup = LayoutInflater.from(context)
-            .inflate(R.layout.dock_apps_layout, null) as ViewGroup
-        dockAppsGroup?.defaultFocusHighlightEnabled = false
-        dockAppsLayout = dockAppsGroup?.findViewById(R.id.apps_rv)
-        dockAppsLayout?.reloadActivityManager(context)
-        dockAppsLayout?.let { layout ->
-            overviewProvider = AllAppsProvider(context, layout)
-            layout.overviewProvider = overviewProvider
+        for (i in 0 until taskbarInstances.size()) {
+            taskbarInstances.valueAt(i).onDisplayConfigChanged()
         }
     }
-
 
     override fun onDestroy() {
         configHandler.removeCallbacksAndMessages(null)
@@ -435,6 +308,290 @@ class TaskbarOverlay : TaskbarPlugin , UninstallReceiver.AppUninstallListener{
             }
         }
         configChangeReceiver = null
+        try {
+            hostContext?.unregisterReceiver(closeSystemDialogsReceiver)
+        } catch (e: Exception) {
+            Log.w(TAG, "unregister closeSystemDialogsReceiver failed: ${e.message}")
+        }
+        dockStateReceiver?.let {
+            try {
+                hostContext?.unregisterReceiver(it)
+            } catch (e: Exception) {
+                Log.w(TAG, "unregister dockStateReceiver failed: ${e.message}")
+            }
+        }
+        dockStateReceiver = null
+        receiver?.let {
+            try {
+                pluginContext?.unregisterReceiver(it)
+            } catch (e: Exception) {
+                Log.w(TAG, "unregister package receiver failed: ${e.message}")
+            }
+        }
+        receiver = null
+        destroyAllInstances()
         pluginContext = null
+    }
+
+    /** One taskbar window/instance for one display. */
+    private inner class TaskbarInstance(private val displayId: Int) {
+        private var root: ViewGroup? = null
+        private var displayContext: Context? = null
+        private var inflater: LayoutInflater? = null
+        private var dockAppsGroup: ViewGroup? = null
+        private var dockAppsLayout: DockAppsLayout? = null
+        private var overviewProvider: AllAppsProvider? = null
+        private var dockScaleFactor = DEFAULT_DOCK_SCALE
+        private var lastDensityDpi = -1
+        private var lastFontScale = -1f
+
+        /**
+         * Rebind this display's dock to the host's new taskbar root. The root can change on
+         * every taskbar recreation while the display instance stays alive, so always detach
+         * from the previous parent before adding the dock to the new one.
+         */
+        fun bind(taskbarRoot: ViewGroup) {
+            val context = createDisplayContext(taskbarRoot)
+            if (context == null) {
+                Log.w(TAG, "bind: no context for display $displayId")
+                return
+            }
+            detachDock()
+            root = taskbarRoot
+            displayContext = context
+            inflater = createInflater(context)
+            taskbarRoot.removeAllViews()
+            ensureDock()
+            updateNaviDock()
+        }
+
+        /**
+         * Build a display-specific context for this taskbar. The host may call setup() before
+         * the root is attached, in which case fall back to the plugin context and let a later
+         * rebind use the real display context.
+         */
+        private fun createDisplayContext(taskbarRoot: ViewGroup): Context? {
+            val plugin = pluginContext ?: return null
+            return try {
+                val display = taskbarRoot.display ?: taskbarRoot.context.display
+                if (display != null) {
+                    // createDisplayContext() delegates to the base application context and loses
+                    // PluginContextWrapper's class loader. Keep the display-adjusted resources
+                    // but restore the plugin class loader, otherwise nested layouts inflated by
+                    // child views (e.g. DockAppAdapter#onCreateViewHolder) cannot resolve
+                    // com.fde.taskplugin.view.* classes and crash with ClassNotFoundException.
+                    val displayContext = plugin.createDisplayContext(display)
+                    DisplayContextWrapper(displayContext, plugin.classLoader)
+                } else {
+                    // Root not attached yet. Fall back to the plugin context; a later setup()
+                    // recreation will rebind with the real display context.
+                    plugin
+                }
+            } catch (t: Throwable) {
+                Log.w(TAG, "createDisplayContext failed for display $displayId", t)
+                plugin
+            }
+        }
+
+        /**
+         * Display-adjusted context that keeps the plugin class loader and a plugin-aware
+         * LayoutInflater. ContextWrapper would otherwise expose the base application context's
+         * empty class loader for nested inflater calls.
+         */
+        private inner class DisplayContextWrapper(
+            base: Context,
+            private val pluginClassLoader: ClassLoader,
+        ) : ContextWrapper(base) {
+            private val pluginInflater: LayoutInflater by lazy {
+                LayoutInflater.from(base).cloneInContext(this).also { inflater ->
+                    inflater.factory2 = object : LayoutInflater.Factory2 {
+                        override fun onCreateView(
+                            parent: View?,
+                            name: String,
+                            context: Context,
+                            attrs: AttributeSet,
+                        ): View? = createCustomView(name, context, attrs)
+
+                        override fun onCreateView(
+                            name: String,
+                            context: Context,
+                            attrs: AttributeSet,
+                        ): View? = createCustomView(name, context, attrs)
+                    }
+                }
+            }
+
+            override fun getClassLoader(): ClassLoader = pluginClassLoader
+
+            override fun getSystemService(name: String): Any? {
+                if (Context.LAYOUT_INFLATER_SERVICE == name) {
+                    return pluginInflater
+                }
+                return super.getSystemService(name)
+            }
+        }
+
+        private fun createInflater(context: Context): LayoutInflater {
+            val inflater = LayoutInflater.from(context).cloneInContext(context)
+            inflater.factory2 = object : LayoutInflater.Factory2 {
+                override fun onCreateView(
+                    parent: View?,
+                    name: String,
+                    context: Context,
+                    attrs: AttributeSet,
+                ): View? = createCustomView(name, context, attrs)
+
+                override fun onCreateView(
+                    name: String,
+                    context: Context,
+                    attrs: AttributeSet,
+                ): View? = createCustomView(name, context, attrs)
+            }
+            return inflater
+        }
+
+        private fun createCustomView(
+            name: String,
+            context: Context,
+            attrs: AttributeSet,
+        ): View? {
+            return try {
+                if (name.contains(context.packageName)) {
+                    val clazz = Class.forName(name, true, classLoader)
+                    clazz.getConstructor(Context::class.java, AttributeSet::class.java)
+                        .newInstance(context, attrs) as View
+                } else {
+                    null
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "createCustomView failed: $name", e)
+                null
+            }
+        }
+
+        /**
+         * Inflate this display's dock once and rebuild it when density/font scale changes.
+         * Every display gets its own DockAppsProvider so pin/unpin state stays global while
+         * launch contexts remain display-local.
+         */
+        private fun ensureDock() {
+            val context = displayContext ?: return
+            ScreenSizeUtils.getInstance(context).refresh(context)
+            val metrics = context.resources.displayMetrics
+            val fontScale = context.resources.configuration.fontScale
+            val needNew = dockAppsGroup == null ||
+                metrics.densityDpi != lastDensityDpi ||
+                fontScale != lastFontScale
+            if (!needNew) {
+                dockScaleFactor = readDockScale()
+                return
+            }
+
+            dockAppsLayout?.dismissAllPopups()
+            dockAppsLayout?.onDestroy()
+            detachDock()
+
+            val layoutInflater = inflater ?: return
+            val group = layoutInflater.inflate(R.layout.dock_apps_layout, null) as ViewGroup
+            group.defaultFocusHighlightEnabled = false
+            val layout = group.findViewById<DockAppsLayout>(R.id.apps_rv) ?: return
+            layout.reloadActivityManager(context)
+            val provider = AllAppsProvider(context, layout)
+            layout.overviewProvider = provider
+
+            dockAppsGroup = group
+            dockAppsLayout = layout
+            overviewProvider = provider
+            lastDensityDpi = metrics.densityDpi
+            lastFontScale = fontScale
+            dockScaleFactor = readDockScale()
+        }
+
+        /** Attach the prepared dock to this display's taskbar root and start its data flow. */
+        private fun updateNaviDock() {
+            val taskbarRoot = root ?: return
+            detachDock()
+            taskbarRoot.removeAllViews()
+            val dock = dockAppsGroup ?: return
+
+            val dockParams = if (taskbarRoot is FrameLayout) {
+                FrameLayout.LayoutParams(
+                    FrameLayout.LayoutParams.WRAP_CONTENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT,
+                    Gravity.CENTER_HORIZONTAL or Gravity.BOTTOM,
+                )
+            } else {
+                ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                )
+            }
+            taskbarRoot.addView(dock, dockParams)
+            taskbarRoot.visibility = View.VISIBLE
+            dockAppsLayout?.navi = taskbarRoot
+            dockAppsLayout?.initApps(dockScaleFactor)
+
+            dockAppsGroup?.setOnClickListener {
+                taskbarRoot.background = null
+                dockAppsLayout?.updateNaviWindowFlags()
+            }
+            taskbarRoot.postDelayed({
+                dockAppsLayout?.updateNaviWindowFlags()
+            }, 1000)
+            if (Utils.getProperty("fde.systemui.blurlevel", 0) == 0) {
+                Utils.setBackgroundBlurRadius(
+                    dockAppsGroup?.findViewById(R.id.root_blur), 70, 16f)
+            } else {
+                val bgViewGroup = dockAppsGroup?.findViewById<ViewGroup>(R.id.paren_fl)
+                bgViewGroup?.setBackgroundResource(R.drawable.round_rect_16dp_no_blur)
+                val cardView = dockAppsGroup?.findViewById<CardView>(R.id.root_blur)
+                cardView?.setCardBackgroundColor(Color.parseColor("#aaF2F6FA"))
+            }
+        }
+
+        /** Refresh only the trash item after its storage state changes. */
+        fun refreshTrashItem() {
+            dockAppsLayout?.refreshTrashItem()
+        }
+
+        fun refreshDockState() {
+            dockScaleFactor = readDockScale()
+            dockAppsLayout?.initApps(dockScaleFactor)
+        }
+
+        fun onUninstall(packageName: String) {
+            dockAppsLayout?.onUninstall(packageName)
+        }
+
+        fun dismissPopups() {
+            dockAppsLayout?.dismissAllPopups()
+        }
+
+        fun onDisplayConfigChanged() {
+            val context = displayContext ?: return
+            ScreenSizeUtils.getInstance(context).refresh(context)
+            dockScaleFactor = readDockScale()
+            ensureDock()
+            updateNaviDock()
+        }
+
+        private fun detachDock() {
+            val dock = dockAppsGroup ?: return
+            (dock.parent as? ViewGroup)?.removeView(dock)
+        }
+
+        fun destroy() {
+            Log.d(TAG, "destroy taskbar display=$displayId")
+            dockAppsLayout?.dismissAllPopups()
+            dockAppsLayout?.onDestroy()
+            detachDock()
+            root?.removeAllViews()
+            dockAppsGroup = null
+            dockAppsLayout = null
+            overviewProvider = null
+            root = null
+            displayContext = null
+            inflater = null
+        }
     }
 }

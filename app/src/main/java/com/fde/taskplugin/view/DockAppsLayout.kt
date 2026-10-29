@@ -30,6 +30,7 @@ import android.view.ViewGroup.LayoutParams.MATCH_PARENT
 import android.view.WindowManager
 import android.view.WindowManager.LayoutParams.TYPE_SEARCH_BAR
 import android.view.accessibility.AccessibilityManager
+import android.widget.FrameLayout
 import androidx.recyclerview.widget.ItemTouchHelper
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
@@ -51,6 +52,7 @@ import com.fde.taskplugin.utils.AppUtils
 import com.fde.taskplugin.utils.DocumentsUiHelper
 import com.fde.taskplugin.utils.HostActivityManager
 import com.fde.taskplugin.utils.HostDesktopMode
+import com.fde.taskplugin.utils.LaunchUtils
 import com.fde.taskplugin.utils.ScreenSizeUtils
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
@@ -567,9 +569,17 @@ constructor(
 
     /** 固定的两个图标：最近任务、回收站，始终排在最后。 */
     private fun appendFixedTasks() {
+        tasks.removeAll { isFixedTask(it) }
+        // FDE: the secondary taskbar has no stable interaction design for these global
+        // buttons yet; keep them only on the primary display for now.
+        val displayId = display?.displayId
+            ?: context.display?.displayId
+            ?: Display.DEFAULT_DISPLAY
+        if (displayId != Display.DEFAULT_DISPLAY) {
+            return
+        }
         val recents = recentsTask ?: createRecentsTask().also { recentsTask = it }
         val trash = trashTask ?: createTrashTask().also { trashTask = it }
-        tasks.removeAll { isFixedTask(it) }
         tasks.add(recents)
         tasks.add(trash)
     }
@@ -621,7 +631,7 @@ constructor(
             val intent = context.packageManager.getLaunchIntentForPackage("com.android.documentsui")
             intent?.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
             if (intent != null) {
-                context.startActivity(intent)
+                LaunchUtils.launch(context, intent)
             }
         } catch (t: Throwable) {
             Log.w(TAG, "launchDocumentsUi failed", t)
@@ -881,12 +891,46 @@ constructor(
         val height = (res.getDimension(R.dimen.dock_app_layout_height) * scale + 0.5f)
             .toInt().coerceIn(0, maxHeight)
 
-        params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-        params.width = width
-        params.height = height
-        Log.d(TAG, "$this updateNaviWidth: count=$count width=$width height=$height scale=$scale")
-        if (windowRoot.isAttachedToWindow) {
-            windowManager.updateViewLayout(windowRoot, params)
+        val displayId = windowRoot.display?.displayId
+            ?: context.display?.displayId
+            ?: Display.DEFAULT_DISPLAY
+        val isPanelWindow = params.type == WindowManager.LayoutParams.TYPE_NAVIGATION_BAR_PANEL
+        if (!isPanelWindow) {
+            params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
+            params.x = 0
+            params.width = width
+            params.height = height
+            Log.d(TAG, "$this updateNaviWidth: display=$displayId count=$count " +
+                "width=$width height=$height scale=$scale")
+            if (windowRoot.isAttachedToWindow) {
+                windowManager.updateViewLayout(windowRoot, params)
+            }
+        } else {
+            // Connected display uses TYPE_NAVIGATION_BAR_PANEL. Resizing that panel window to
+            // the dock width and relying on CENTER_HORIZONTAL leaves it anchored at the left.
+            // Keep the panel full-width and center the dock child inside it instead.
+            params.gravity = Gravity.BOTTOM
+            params.x = 0
+            params.width = ViewGroup.LayoutParams.MATCH_PARENT
+            params.height = height
+            Log.d(TAG, "$this updateNaviWidth: display=$displayId type=${params.type} " +
+                "count=$count width=$width height=$height scale=$scale " +
+                "screen=${screen.screenWidth}x${screen.screenHeight} panel=full")
+            if (windowRoot.isAttachedToWindow) {
+                windowManager.updateViewLayout(windowRoot, params)
+            }
+            val dockView = (windowRoot as? ViewGroup)?.getChildAt(0)
+            val dockParams = dockView?.layoutParams as? FrameLayout.LayoutParams
+            if (dockView != null && dockParams != null) {
+                dockParams.width = width
+                dockParams.height = height
+                // Position the dock explicitly; panel windows have shown inconsistent
+                // CENTER_HORIZONTAL behavior across displays/OEM window managers.
+                dockParams.gravity = Gravity.TOP or Gravity.LEFT
+                dockParams.leftMargin = ((screen.screenWidth - width) / 2).coerceAtLeast(0)
+                dockParams.rightMargin = 0
+                dockView.layoutParams = dockParams
+            }
         }
     }
 
@@ -921,6 +965,10 @@ constructor(
         return dockProvider.getActiveSize()
     }
 
+    override fun hasFixedDockTasks(): Boolean {
+        return tasks.any { isFixedTask(it) }
+    }
+
     override fun onItemClick(dockContext: DockContext) {
         if(appOverviewWindow != null && appOverviewWindow?.isShowing() == true){
             appOverviewWindow?.dismiss()
@@ -940,7 +988,7 @@ constructor(
                         val intent = Intent()
                         intent.component = appData?.componentName
                         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                        context.startActivity(intent)
+                        LaunchUtils.launch(context, intent)
                     }
                 } catch (e: ActivityNotFoundException) {
                 }
@@ -1009,7 +1057,7 @@ constructor(
                 }else if(!TextUtils.isEmpty(taskInfo.packageName) && taskInfo.launchIntent != null){
                     val launchIntent = taskInfo.launchIntent
                     launchIntent?.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(launchIntent)
+                    LaunchUtils.launch(context, launchIntent!!, taskInfo)
                 }
             }
             resources.getString(R.string.empty_trash) ->{
@@ -1103,6 +1151,9 @@ constructor(
                 .paramType(TYPE_SEARCH_BAR)
                 .build(AbsTopPopWindow.WindowType.Overview) as AppOverviewWindow
             appOverviewWindow?.dockScaleFactor = dockScaleFactor
+            appOverviewWindow?.displayId = display?.displayId
+                ?: context.display?.displayId
+                ?: Display.DEFAULT_DISPLAY
             appOverviewWindow?.updateAppList(overviewApps)
             appOverviewWindow?.dismissListener = object : AbsTopPopWindow.WindowDismissListener{
                 override fun onWindowDismiss() {
@@ -1122,6 +1173,9 @@ constructor(
             appOverviewWindow?.dockProvider = dockProvider
         } else {
             appOverviewWindow?.dockScaleFactor = dockScaleFactor
+            appOverviewWindow?.displayId = display?.displayId
+                ?: context.display?.displayId
+                ?: Display.DEFAULT_DISPLAY
         }
     }
 

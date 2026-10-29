@@ -48,6 +48,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
     val persistDockApps: MutableList<TaskInfo> = ArrayList()
     private val activeDockApps: MutableList<TaskInfo> = ArrayList()
     private val persisApps: MutableList<PersistApp> = ArrayList()
+    private var taskStackListenerRegistered = false
 
     companion object {
         const val PACKAGE_X11 = "com.fde.x11"
@@ -55,6 +56,8 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         const val ACTION_DOCK_OVERVIEW = "com.fde.systemui.SHOW_APP_OVERVIEW"
         const val ACTION_OPEN_TRASH = "com.fde.systemui.OPEN_TRASH"
         const val ACTION_SHOW_RECENTS = "com.fde.systemui.SHOW_RECENTS"
+        /** Sent when the persisted dock/pin state changes so every display taskbar refreshes. */
+        const val ACTION_DOCK_STATE_CHANGED = "com.fde.taskplugin.DOCK_STATE_CHANGED"
 
         private val AM_WRAPPER = ActivityManagerWrapper.getInstance()
         private val TC_WRAPPER = TaskStackChangeListeners.getInstance()
@@ -214,6 +217,9 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
             return false
         }
         val packageName = componentName.packageName
+        if(TextUtils.equals(packageName, "com.android.launcher3")){
+            return true
+        }
         val className = componentName.className
         val intent = Intent(Intent.ACTION_MAIN)
         intent.addCategory(Intent.CATEGORY_HOME)
@@ -411,14 +417,23 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
 
 
     fun registerTaskStackListener(){
+        if (taskStackListenerRegistered) {
+            appstateListener.updateDockAppLocked()
+            return
+        }
         TC_WRAPPER.registerTaskStackListener(appstateListener)
         ActivityTaskManager.getInstance().registerTaskStackListener(taskFocusListener)
+        taskStackListenerRegistered = true
         appstateListener.updateDockAppLocked()
     }
 
     fun unregisterTaskStackListener(){
+        if (!taskStackListenerRegistered) {
+            return
+        }
         TC_WRAPPER.unregisterTaskStackListener(appstateListener)
         ActivityTaskManager.getInstance().unregisterTaskStackListener(taskFocusListener)
+        taskStackListenerRegistered = false
     }
 
     fun getPersistSize(): Int {
@@ -435,6 +450,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
 
     fun savePersistOrder() {
         SPUtils.updatePersistDockApp(persistDockApps)
+        notifyDockStateChanged()
     }
 
     fun getActiveSize(): Int {
@@ -474,6 +490,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         apps.addAll(persistDockApps)
         apps.addAll(activeDockApps)
         updater.notifyDockAapp(apps)
+        notifyDockStateChanged()
     }
 
     fun unpin(taskInfo: TaskInfo) {
@@ -489,6 +506,7 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         apps.addAll(persistDockApps)
         apps.addAll(activeDockApps)
         updater.notifyDockAapp(apps)
+        notifyDockStateChanged()
     }
 
     fun isPersistDockApp(packageName: String): Boolean {
@@ -514,6 +532,20 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         apps.addAll(persistDockApps)
         apps.addAll(activeDockApps)
         updater.notifyDockAapp(apps)
+        notifyDockStateChanged()
+    }
+
+    /**
+     * Each display owns a DockAppsProvider but pin state is global. Notify all taskbar
+     * instances so a pin/unpin/reorder made on one display is reflected on the others.
+     */
+    private fun notifyDockStateChanged() {
+        try {
+            val intent = Intent(ACTION_DOCK_STATE_CHANGED).setPackage(context.packageName)
+            context.sendBroadcast(intent)
+        } catch (t: Throwable) {
+            Log.w(TAG, "notifyDockStateChanged failed", t)
+        }
     }
 
 
@@ -565,6 +597,15 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
             super.onTaskRemoved(taskId)
             logByTaskid("onTaskRemoved", taskId)
             activeDockApps.removeIf {taskInfo: TaskInfo -> taskInfo.id == taskId}
+            // Persisted (pinned) icons are not in activeDockApps, so clear their stale
+            // RunningTaskInfo snapshot here. Otherwise a later click can try to bring a dead
+            // task to front and the app never launches.
+            persistDockApps.forEach { taskInfo ->
+                if (taskInfo.id == taskId) {
+                    taskInfo.runningTaskInfo = null
+                    taskInfo.finshTask()
+                }
+            }
             updater.removeTask(taskId)
             onTaskStackChanged()
         }

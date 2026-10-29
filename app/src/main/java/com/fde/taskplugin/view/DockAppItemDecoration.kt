@@ -36,13 +36,12 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
         if (childPosition < 0) {
             return false
         }
-        // persist 与 active 之间
-        if ((childPosition == classify.classifyPersit() - 1) && classify.classifyActive() != 0) {
-            return true
-        }
-        // 固定在最右的一组（最近任务、回收站）与前面的图标之间
+        // 固定在最右的一组（最近任务、回收站）与前面的图标之间。副屏没有这组按钮时
+        // 不能再按 itemCount - 3 画分隔，否则会在普通图标之间凭空多出一段间距。
         val itemCount = parent.adapter?.itemCount ?: 0
-        return itemCount >= 3 && childPosition == itemCount - 3
+        return classify.hasFixedDockTasks() &&
+            itemCount >= 3 &&
+            childPosition == itemCount - 3
     }
 
     fun getDividerBound(position: Int, parent: RecyclerView?, child: View): Rect {
@@ -84,6 +83,8 @@ class DockAppItemDecoration(private val classify: AppClassify) : ItemDecoration(
 
         fun classifyPersit():Int
         fun classifyActive():Int
+        /** Whether this dock actually contains the pinned recents/trash group. */
+        fun hasFixedDockTasks(): Boolean = true
 
     }
 }

@@ -14,6 +14,7 @@ import androidx.recyclerview.widget.RecyclerView
 import com.fde.taskplugin.R
 import com.fde.taskplugin.constant.HandlerConstant
 import com.fde.taskplugin.data.AppData
+import com.fde.taskplugin.utils.LaunchUtils
 import com.fde.taskplugin.utils.LogTools
 import com.fde.taskplugin.utils.SPUtils
 
@@ -59,7 +60,7 @@ class CollectAppsLayout @JvmOverloads constructor(
                 val intent = Intent()
                 intent.component = appData?.componentName
                 intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context.startActivity(intent)
+                LaunchUtils.launch(context, intent)
                 if (handler != null) {
                     handler!!.sendEmptyMessage(HandlerConstant.H_DISMISS_ALL_APPS_WINDOW)
                 }
