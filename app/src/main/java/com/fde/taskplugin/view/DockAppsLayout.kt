@@ -477,16 +477,22 @@ constructor(
                 taskInfo = info
             }
         }
-        if(taskInfo != null){
-            if( taskInfo!!.isPersist()){
-                taskInfo?.finshTask()
+        val removedTask: TaskInfo? = taskInfo
+        if (removedTask != null) {
+            if (removedTask.isPersist()) {
+                removedTask.finshTask()
             } else {
-                tasks.removeIf { taskInfo: TaskInfo -> taskInfo.id == taskId }
+                tasks.removeIf { info -> info.id == taskId }
             }
-            dockAppAdapter!!.setData(tasks)
-            // 状态复位/条目移除后必须让该图标重新 bind：打开态下划线是 onBindViewHolder
-            // 写入 status_v 的背景，不重绑就会一直保留旧的“打开中”指示（issue #507）。
-            dockAppAdapter?.forceRefreshItem(taskInfo?.packageName)
+        }
+        // 无论是否命中都要刷新：TaskInfo.id 可能早已被复位/换成新实例（issue #507），
+        // 此时上面的匹配不成立，但图标上的打开态下划线仍然必须被清除。
+        dockAppAdapter!!.setData(tasks)
+        if (removedTask != null) {
+            dockAppAdapter?.forceRefreshItem(removedTask.packageName)
+        } else {
+            Log.d(TAG, "removeTask: taskId=$taskId not found in dock, ids=${tasks.map { it.id }}")
+            dockAppAdapter?.forceRefreshAll()
         }
         updateTaskPreviewAfterDataChange()
         scheduleDockIconBoundsReport()
@@ -525,6 +531,18 @@ constructor(
 //        tasks.forEach { taskInfo -> Log.d(TAG, "notifyDockAapp each: $taskInfo") }
         dockAppAdapter?.setData(tasks)
         dockAppAdapter?.notifyDataSetChangedWapper()
+        updateNaviWidth(tasks.size)
+        updateTaskPreviewAfterDataChange()
+        scheduleDockIconBoundsReport()
+    }
+
+    override fun refreshDockRunningStates(list: MutableList<TaskInfo>) {
+        tasks.clear()
+        tasks.addAll(list)
+        appendFixedTasks()
+        // 状态已被反向对账复位，这里强制重绑，避免签名 diff 判定不出变化导致指示残留（issue #507）。
+        dockAppAdapter?.setData(tasks)
+        dockAppAdapter?.forceRefreshAll()
         updateNaviWidth(tasks.size)
         updateTaskPreviewAfterDataChange()
         scheduleDockIconBoundsReport()

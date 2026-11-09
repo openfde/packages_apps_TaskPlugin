@@ -598,6 +598,18 @@ class DockAppAdapter(private val context: Context) :
     }
 
     /**
+     * 强制所有 dock 图标重绑一次，并同步快照。
+     *
+     * 用于状态可能已经失配、但签名 diff 判定不出变化的兜底刷新：例如 TaskInfo.id 已
+     * 复位成 0、状态却仍停在 RUNNING/TOP 时，图标会一直显示“打开中”（issue #507）。
+     */
+    fun forceRefreshAll() {
+        boundApps = ArrayList(apps)
+        boundSignatures = apps.map { signatureOf(it) }
+        notifyDataSetChanged()
+    }
+
+    /**
      * 用 DiffUtil 做增量刷新，只对发生变化的图标派发通知，
      * 这样 RecyclerView 才能跑新增/移除/位移动画，而不是整列表瞬间重刷。
      */

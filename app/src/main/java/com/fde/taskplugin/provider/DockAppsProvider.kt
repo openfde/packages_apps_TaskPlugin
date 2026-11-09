@@ -561,6 +561,39 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
     }
 
 
+    /**
+     * 把 dock 上已经不在运行的图标状态复位（包级对账，不依赖 TaskInfo.id）。
+     *
+     * dock 的 id 只在 topTask() 中写入，而 providePersistApps()/initApps() 会重建一批新实例，
+     * id 可能长期为 0；此时 removeTask(taskId) 的 id 匹配不成立，状态会停在 RUNNING/TOP，
+     * 图标残留“打开中”下划线（issue #507）。同包多窗口只要还有一个窗口在运行就保留下划线。
+     */
+    private fun resetDockAppsNotIn(runningTasks: List<RunningTaskInfo>): Boolean {
+        val runningPackages = HashSet<String>()
+        runningTasks.forEach { info ->
+            val pkg = getRunningTaskInfoPackageName(info) ?: return@forEach
+            runningPackages.add(pkg)
+            if (Utils.isX11App(pkg, info.topActivity)) {
+                // Linux/X11 应用在 dock 里的包名是 "pkg#label"，同时保留基础包名以兼容旧数据。
+                info.taskDescription?.label?.let { runningPackages.add("$pkg#$it") }
+            }
+        }
+        var changed = false
+        persistDockApps.forEach { app ->
+            if (app.isRunning() && app.packageName !in runningPackages) {
+                app.runningTaskInfo = null
+                app.finshTask()
+                changed = true
+            }
+        }
+        val activeSize = activeDockApps.size
+        activeDockApps.removeIf { app -> app.packageName !in runningPackages }
+        if (activeDockApps.size != activeSize) {
+            changed = true
+        }
+        return changed
+    }
+
     inner class AppStateListener(private val updater: DockTaskViewUpdater) : TaskStackChangeListener {
 
         private val TAG: String = "AppStateListener"
@@ -603,6 +636,13 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
             // 否则后处理的非焦点窗口会把共享 TaskInfo 的 TOP 状态覆盖成 RUNNING。
             runningTasks.filter { !it.isFocused }.forEach { topTask(it, false) }
             runningTasks.filter { it.isFocused }.forEach { topTask(it, true) }
+            // 反向对账：已经没有任何运行窗口的 dock 图标必须复位，不依赖 TaskInfo.id（issue #507）。
+            if (resetDockAppsNotIn(runningTasks)) {
+                val apps: MutableList<TaskInfo> = ArrayList()
+                apps.addAll(persistDockApps)
+                apps.addAll(activeDockApps)
+                updater.refreshDockRunningStates(apps)
+            }
         }
 
         override fun onTaskRemoved(taskId: Int) {
@@ -637,6 +677,8 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         fun removeTask(taskId: Int)
         fun setTop(info: TaskInfo?, needAdd: Boolean, isTop: Boolean)
         fun notifyDockAapp(taskInfo: MutableList<TaskInfo>)
+        /** 状态被反向对账复位后强制刷新 dock，避免图标残留打开态指示（issue #507）。 */
+        fun refreshDockRunningStates(taskInfo: MutableList<TaskInfo>)
         fun getDockAapp():MutableList<TaskInfo>
         fun getOverviewAppData():MutableList<AppData>
     }
