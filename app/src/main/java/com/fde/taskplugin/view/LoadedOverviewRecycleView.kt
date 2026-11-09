@@ -1,20 +1,16 @@
 package com.fde.taskplugin.view
 
-import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.ClipData
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ApplicationInfo
-import android.content.pm.ShortcutInfo
-import android.content.pm.ShortcutManager
 import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.Point
 import android.graphics.Rect
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.Drawable
-import android.graphics.drawable.Icon
 import android.net.Uri
 import android.text.TextUtils
 import android.util.AttributeSet
@@ -61,7 +57,6 @@ constructor(
     companion object {
         public const val NUMBER_OF_COLUMNS = 7
         private const val TAG = "LoadedRecycleView"
-        private const val ACTION_SHORT_CUT = "com.android.launcher3.action.ADD_SHORT_CUT"
         const val MIME_APP_LAUNCH = "com.fde.taskplugin/app-launch"
     }
 
@@ -417,32 +412,7 @@ constructor(
 
         fun createShortcut(app: AppData) {
             com.fde.taskplugin.Log.d(TAG, "createShortcut() called with: app = [${app.name}]")
-            val inte = Intent(ACTION_SHORT_CUT)
-            inte.putExtra("packageName", app.packageName!!)
-            inte.putExtra("appName", app.name!!)
-            inte.setPackage("com.android.launcher3")
-            context.sendBroadcast(inte)
-//            val icon = Icon.createWithBitmap(Utils.drawableToBitmap(app.icon!!))
-//            val shortcutManager: ShortcutManager? =
-//                context?.getSystemService(ShortcutManager::class.java)
-//            if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported) {
-//                val launchIntentForPackage: Intent = context?.getPackageManager()
-//                    ?.getLaunchIntentForPackage(app.packageName!!) as Intent
-//                launchIntentForPackage.action = Intent.ACTION_MAIN
-//                val pinShortcutInfo = ShortcutInfo.Builder(context, app.name)
-//                    .setLongLabel(app.packageName!!)
-//                    .setShortLabel(app.name!!)
-//                    .setIcon(icon)
-//                    .setIntent(launchIntentForPackage)
-//                    .build()
-//                val pinnedShortcutCallbackIntent =
-//                    shortcutManager.createShortcutResultIntent(pinShortcutInfo)
-//                val successCallback = PendingIntent.getBroadcast(
-//                    context, 0,
-//                    pinnedShortcutCallbackIntent, PendingIntent.FLAG_IMMUTABLE
-//                )
-//                shortcutManager.requestPinShortcut(pinShortcutInfo, successCallback.intentSender)
-//            }
+            AppUtils.createShortcut(context, app)
         }
 
         private fun startDragToLauncher(appData: AppData, iconView: ImageView?) {

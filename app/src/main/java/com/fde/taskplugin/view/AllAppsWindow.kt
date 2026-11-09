@@ -435,6 +435,7 @@ class AllAppsWindow(private val mContext: Context?, private val sContext: Contex
                     SPUtils.putUserInfo(mContext, appData.packageName, "");
                     refreshCollectList()
                 } else if (action.text.equals(mContext.getString(R.string.todesk))) {
+                    dismiss()
                     AppUtils.createShortcut(mContext, appData)
                 } else if (action.text.equals(mContext.getString(R.string.uninstall))) {
                     if (!isSystem) {
