@@ -1,6 +1,5 @@
 package com.fde.taskplugin.utils
 
-import android.annotation.SuppressLint
 import android.app.ActivityManager
 import android.app.usage.UsageStats
 import android.app.usage.UsageStatsManager
@@ -13,18 +12,17 @@ import android.graphics.drawable.Drawable
 import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
-import androidx.core.content.pm.ShortcutInfoCompat
-import androidx.core.content.pm.ShortcutManagerCompat
-import androidx.core.graphics.drawable.IconCompat
+import android.os.UserHandle
 import com.fde.taskplugin.AppTask
+import com.fde.taskplugin.GlobalSystemUIContext
 import com.fde.taskplugin.Log
-import com.fde.taskplugin.R
 import com.fde.taskplugin.data.App
 import com.fde.taskplugin.data.AppData
 import java.io.*
 import java.util.*
 
 object AppUtils {
+    private const val TAG = "AppUtils"
     const val PINNED_LIST = "pinned.lst"
     const val DOCK_PINNED_LIST = "dock_pinned.lst"
     const val DESKTOP_LIST = "desktop.lst"
@@ -323,48 +321,71 @@ object AppUtils {
         mContext?.startActivity(uninstallIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
     }
 
-    @SuppressLint("SoonBlockedPrivateApi")
     public fun createShortcut(mContext: Context, app: AppData) {
-//                Log.d("TAG", "createShortcut() called with: app = [${app.name}]")
-//        val icon = Icon.createWithBitmap(Utils.drawableToBitmap(app.icon!!))
-//        val shortcutManager: ShortcutManager? =
-//            mContext?.getSystemService(ShortcutManager::class.java)
-//        if (shortcutManager != null && shortcutManager.isRequestPinShortcutSupported) {
-//            val launchIntentForPackage: Intent = mContext?.getPackageManager()
-//                ?.getLaunchIntentForPackage(app.packageName!!) as Intent
-//            launchIntentForPackage.action = Intent.ACTION_MAIN
-//            val pinShortcutInfo = ShortcutInfo.Builder(mContext, app.name)
-//                .setLongLabel(app.name!!)
-//                .setShortLabel(app.name!!)
-//                .setIcon(icon)
-//                .setIntent(launchIntentForPackage)
-//                .build()
-//            val pinnedShortcutCallbackIntent =
-//                shortcutManager.createShortcutResultIntent(pinShortcutInfo)
-//            val successCallback = PendingIntent.getBroadcast(
-//                mContext, 0,
-//                pinnedShortcutCallbackIntent, PendingIntent.FLAG_IMMUTABLE
-//            )
-//            shortcutManager.requestPinShortcut(pinShortcutInfo, successCallback.intentSender)
-//        }
+        val packageName = app.packageName ?: return
+        val hostContext = runCatching { GlobalSystemUIContext.getContext() }.getOrNull()
+        if (hostContext == null) {
+            Log.e(TAG, "createShortcut: host context not initialized")
+            return
+        }
+        if (hostContext.packageManager.getLaunchIntentForPackage(packageName) == null) {
+            Log.e(TAG, "createShortcut: no launch intent for $packageName")
+            return
+        }
+        Log.d(
+            TAG,
+            "createShortcut: host=${hostContext.packageName}" +
+                    ", app=${hostContext.applicationContext?.javaClass?.name}"
+        )
 
-        val shortcut = ShortcutInfoCompat.Builder(mContext, "myshortcutid")
-            .setShortLabel("Website")
-            .setLongLabel("Open the website")
-            .setIcon(IconCompat.createWithResource(mContext, R.drawable.round_rect))
-            .setIntent(
-                Intent(
-                    Intent.ACTION_VIEW,
-                    Uri.parse("https://www.abc.com/")
-                )
-            )
-            .build()
+        // 与 Launcher 在应用安装完成后自动添加桌面图标使用的是同一套流程：
+        // SessionCommitReceiver -> ItemInstallQueue.queueItem(
+        //     new SerializedItemItem(packageName, user))
+        // 由 Launcher 自己寻找空位并添加图标，不会弹出固定快捷方式的确认界面。
+        try {
+            val hostLoader = loadHostClassLoader(hostContext)
+            if (hostLoader == null) {
+                Log.e(TAG, "createShortcut: host class loader not found")
+                return
+            }
+            val queueClass =
+                hostLoader.loadClass("com.android.launcher3.model.ItemInstallQueue")
+            val itemClass =
+                hostLoader.loadClass("com.android.launcher3.model.SerializedItemItem")
 
-        ShortcutManagerCompat.pushDynamicShortcut(mContext, shortcut)
+            val singleton = queueClass.getField("INSTANCE").get(null)
+            val queue = singleton.javaClass.getMethod("get", Context::class.java)
+                .invoke(singleton, hostContext)
+            val user = android.os.Process.myUserHandle()
+            val item = itemClass.getConstructor(String::class.java, UserHandle::class.java)
+                .newInstance(packageName, user)
+            queueClass.getMethod("queueItem", itemClass).invoke(queue, item)
+            Log.d(TAG, "createShortcut: queued $packageName for user $user")
+        } catch (t: Throwable) {
+            Log.e(TAG, "createShortcut: queue install failed: ${t.message}")
+        }
+    }
 
-
-
-
+    /**
+     * 通过插件 ClassLoader 的父链拿到宿主 Launcher 的 ClassLoader。
+     * 插件运行在 launcher 进程里，因此可以直接访问 launcher 的内部类。
+     */
+    private fun loadHostClassLoader(context: Context): ClassLoader? {
+        try {
+            val filter = AppUtils::class.java.classLoader?.parent
+            val hostLoader = filter?.javaClass?.classLoader
+            if (hostLoader != null) {
+                return hostLoader
+            }
+        } catch (t: Throwable) {
+            Log.w(TAG, "loadHostClassLoader via plugin parent failed: ${t.message}")
+        }
+        return try {
+            context.createPackageContext("com.android.launcher3", 0).classLoader
+        } catch (t: Throwable) {
+            Log.w(TAG, "loadHostClassLoader via package context failed: ${t.message}")
+            null
+        }
     }
 
     public fun toConpatiblePage(mContext: Context, packageName: String, appName: String) {
