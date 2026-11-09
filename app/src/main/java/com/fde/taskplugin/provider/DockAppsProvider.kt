@@ -312,7 +312,19 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
                 && (runningTaskInfo.taskDescription!!.label.contains("Fusion")
                         || runningTaskInfo.taskDescription!!.label.contains("FDE")||taskInfo!!.isLinux())
             ){
-                taskInfo?.icon = BitmapDrawable(runningTaskInfo!!.taskDescription!!.icon)
+                // 没有设置 _NET_WM_ICON 时 taskDescription.icon 为 null。
+                // 直接 BitmapDrawable(null) 会得到一个"非空但画不出内容"的 Drawable，
+                // dock 上就是一张空图；而且下面 icon == null 的兜底也不会生效，
+                // 因为此时 icon 已经不是 null 了。
+                // 这里对 Linux 窗口退回到应用自带的默认图标。
+                val descIcon = runningTaskInfo.taskDescription!!.icon
+                taskInfo?.icon = if (descIcon != null) {
+                    BitmapDrawable(descIcon)
+                } else if (context != null) {
+                    context.getDrawable(R.drawable.linux_x11)
+                } else {
+                    null
+                }
             } else if (taskInfo?.icon == null && infoList.size > 0 && infoList[0] != null) {
                 taskInfo?.icon = infoList[0]!!.getIcon(0)
                 break
