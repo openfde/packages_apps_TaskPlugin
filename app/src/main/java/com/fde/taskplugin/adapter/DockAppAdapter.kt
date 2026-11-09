@@ -575,6 +575,41 @@ class DockAppAdapter(private val context: Context) :
     }
 
     /**
+     * 强制刷新某个包对应的 dock 图标，不依赖增量 diff 的 changed 判定。
+     *
+     * 任务关闭后 TaskInfo 的 id/state 会被复位（DockAppsLayout.removeTask ->
+     * TaskInfo.finshTask），但打开态下划线是 onBindViewHolder 写入 status_v 的
+     * 背景资源，只有重新 bind 才会清除。notifyDataSetChangedWapper() 走签名
+     * diff，且在 animating 时只 post 重试，本次刷新可能整体丢失，图标就会一直
+     * 保留“打开中”指示（issue #507）。这里先派发一次 diff 处理增删/位移，再对
+     * 目标 item 强制 notifyItemChanged，保证状态复位后一定重绑。
+     */
+    fun forceRefreshItem(packageName: String?) {
+        dispatchDataDiff()
+        val position =
+            if (packageName == null) {
+                -1
+            } else {
+                apps.indexOfFirst { TextUtils.equals(it.packageName, packageName) }
+            }
+        if (position >= 0) {
+            notifyItemChanged(position)
+        }
+    }
+
+    /**
+     * 强制所有 dock 图标重绑一次，并同步快照。
+     *
+     * 用于状态可能已经失配、但签名 diff 判定不出变化的兜底刷新：例如 TaskInfo.id 已
+     * 复位成 0、状态却仍停在 RUNNING/TOP 时，图标会一直显示“打开中”（issue #507）。
+     */
+    fun forceRefreshAll() {
+        boundApps = ArrayList(apps)
+        boundSignatures = apps.map { signatureOf(it) }
+        notifyDataSetChanged()
+    }
+
+    /**
      * 用 DiffUtil 做增量刷新，只对发生变化的图标派发通知，
      * 这样 RecyclerView 才能跑新增/移除/位移动画，而不是整列表瞬间重刷。
      */
