@@ -484,7 +484,9 @@ constructor(
                 tasks.removeIf { taskInfo: TaskInfo -> taskInfo.id == taskId }
             }
             dockAppAdapter!!.setData(tasks)
-            dockAppAdapter.notifyDataSetChangedWapper()
+            // 状态复位/条目移除后必须让该图标重新 bind：打开态下划线是 onBindViewHolder
+            // 写入 status_v 的背景，不重绑就会一直保留旧的“打开中”指示（issue #507）。
+            dockAppAdapter?.forceRefreshItem(taskInfo?.packageName)
         }
         updateTaskPreviewAfterDataChange()
         scheduleDockIconBoundsReport()
