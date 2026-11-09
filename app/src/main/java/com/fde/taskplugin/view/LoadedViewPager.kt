@@ -22,11 +22,6 @@ constructor(
     var overviewWindow: AppOverviewWindow ?= null
     private val DEFAULT_TRIGGER_DISTANCE: Int = 20 // 触发翻页的默认距离（像素）
     private val mTriggerDistance = DEFAULT_TRIGGER_DISTANCE
-    // 一个最小滚轮刻度经 hwcomposer 合成后约 60px 的竖直位移
-    // （证据：一次最小刻度 Y 由 675 降到 615，共 60px）。
-    // 每累计约一个刻度的位移翻一页；位移成倍增大时按比例翻更多页，
-    // 而不是“每个手势最多只翻一页”（那会把大距离滚动也限制成一页）。
-    private val PAGE_TURN_DISTANCE: Float = 60f
     private var mStartX = 0f
     private var mStartY = 0f
     private var mMenuVisibleOnDown = false
@@ -61,16 +56,6 @@ constructor(
         }
     }
 
-    // 依据累计竖直位移计算目标翻页数：
-    // 不足 mTriggerDistance 不翻页；约一个滚轮刻度（PAGE_TURN_DISTANCE）翻 1 页；
-    // 位移成倍增大时翻页数同比例增大（滚动越远翻得越多，不再固定为一页）。
-    private fun targetPageCount(dy: Float): Int {
-        if (abs(dy) < mTriggerDistance) {
-            return 0
-        }
-        return max(1, Math.round(abs(dy) / PAGE_TURN_DISTANCE))
-    }
-
     private fun resetGesture() {
         mGestureDy = 0f
         mPagesTurnedInGesture = 0
@@ -81,6 +66,10 @@ constructor(
     // onInterceptTouchEvent 与 OnTouchListener 都会收到同一批 MOVE；
     // 用 eventTime 去重，保证同一段位移只累计、只翻页一次，
     // 避免出现修复前两条路径各自翻页的情况。
+    //
+    // 一次滚动（一个按下→抬起的手势）最多只翻一页：鼠标滚轮在桌面会话中会被
+    // hwcomposer 合成成一段纯竖直的触摸滑动（实测一个最小刻度约 28 帧 MOVE、
+    // 合计约 60px 位移），所以不能用位移大小换算翻页数，否则一次滚动就会翻多页。
     private fun trackGestureMove(ev: MotionEvent) {
         if (ev.eventTime == mLastGestureEventTime) {
             return
@@ -92,16 +81,17 @@ constructor(
         if (abs(ev.x - mStartX) > ViewConfiguration.get(context).scaledTouchSlop) {
             return
         }
-        val target = targetPageCount(mGestureDy)
-        while (mPagesTurnedInGesture < target) {
-            // 竖直位移为负（手指/合成触点向上滑）→ 下一页
-            if (mGestureDy < 0) {
-                goToNextPage()
-            } else {
-                goToPreviousPage()
-            }
-            mPagesTurnedInGesture++
+        // 本次手势已经翻过一页，或累计竖直位移还没到最小触发距离：不再翻页
+        if (mPagesTurnedInGesture > 0 || abs(mGestureDy) < mTriggerDistance) {
+            return
         }
+        // 竖直位移为负（手指/合成触点向上滑）→ 下一页
+        if (mGestureDy < 0) {
+            goToNextPage()
+        } else {
+            goToPreviousPage()
+        }
+        mPagesTurnedInGesture = 1
     }
 
     private var lastInterceptX : Float = -1f
