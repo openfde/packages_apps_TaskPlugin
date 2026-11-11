@@ -148,4 +148,6 @@
     <string name="update">更新</string>
     <string name="version_update">版本更新</string>
 
+    <string name="a11y_move_left">左移</string>
+    <string name="a11y_move_right">右移</string>
 </resources>

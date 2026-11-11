@@ -97,6 +97,12 @@ constructor(
         ) {
             val dockContext = list[position]
 
+            // 无障碍 / 自动化：整行才是点击目标，用显示名做 desc；
+            // 图标和角标是装饰，不单独暴露。
+            holder.itemLl?.contentDescription = dockContext.name
+            holder.iconIv?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+            holder.badgeIv?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+
             if(dockContext.type == TYPE_NAME
                 || dockContext.type == TYPE_ACTION){
                 holder.actionTv?.text = dockContext.name

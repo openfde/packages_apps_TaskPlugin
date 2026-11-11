@@ -340,6 +340,10 @@ constructor(
 
             holder.iconIV?.tag = taskInfo.id
             holder.iconIV?.tooltipText = label
+            // 无障碍 / 自动化：任务条只有图标，用应用名做 desc
+            holder.layoutTask.contentDescription = label
+            holder.layoutTask.isSelected = taskInfo.id == topTaskId
+            holder.iconIV?.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
             val contextListener = object : OnContextClickListener {
                 override fun onContextClick(v: View?): Boolean {
                     listener?.syncVisible(Utils.ALL_INVISIBLE)

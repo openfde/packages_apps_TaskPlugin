@@ -12,6 +12,7 @@ import android.view.LayoutInflater
 import android.view.MotionEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.accessibility.AccessibilityNodeInfo
 import android.view.ViewGroup.LayoutParams.WRAP_CONTENT
 import android.widget.FrameLayout
 import android.widget.ImageView
@@ -173,6 +174,25 @@ class DockAppAdapter(private val context: Context) :
             holder.viewStatus.setBackgroundResource(R.drawable.dock_app_unselect)
         }
         holder.x11Iv.visibility = if(app.platformType == PLATFORM_TYPE_X11) View.VISIBLE else View.GONE
+
+        // --- 无障碍 / 自动化 ---
+        // 所有 dock item 的 id 都是 app_ll，必须靠 contentDescription 区分是哪个应用
+        holder.appll.contentDescription = app.program.ifBlank { app.packageName }
+        // 前台应用 -> selected=true，可用 element.get_attribute("selected") 断言
+        holder.appll.isSelected = app.getState() == STATE_TOP
+        // 运行态 -> checkable/checked（含前台），Appium 读 checked
+        val running = app.getState() != STATE_UNFEFINED
+        holder.appll.accessibilityDelegate = object : View.AccessibilityDelegate() {
+            override fun onInitializeAccessibilityNodeInfo(host: View, info: AccessibilityNodeInfo) {
+                super.onInitializeAccessibilityNodeInfo(host, info)
+                info.isCheckable = true
+                info.isChecked = running
+            }
+        }
+        // 装饰性节点不暴露，避免和父节点重复或把父节点拆开
+        holder.iconIV.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        holder.viewStatus.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
+        holder.x11Iv.importantForAccessibility = View.IMPORTANT_FOR_ACCESSIBILITY_NO
 
         if(app.id == 0){
             holder.appll.tooltipText = app.program
