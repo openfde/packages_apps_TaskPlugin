@@ -437,8 +437,13 @@ constructor(
         tasks.clear()
         tasks.addAll(dockProvider.persistDockApps)
         appendFixedTasks()
-        itemDecoration = DockAppItemDecoration(this)
-        addItemDecoration(itemDecoration!!)
+        // initApps 会在切换壁纸/显示配置变化/宿主重建任务栏时重复调用。ItemDecoration
+        // 一旦重复 add 会叠加 getItemOffsets 的右侧间距，分隔线后就会空出 n*10px
+        // 的空白，所以整个 dock 生命周期内只挂一次。
+        if (itemDecoration == null) {
+            itemDecoration = DockAppItemDecoration(this)
+            addItemDecoration(itemDecoration!!)
+        }
         dockAppAdapter?.dockScaleFactor = dockScaleFactor
         dockAppAdapter?.setData(tasks)
         dockAppAdapter?.listener = this
