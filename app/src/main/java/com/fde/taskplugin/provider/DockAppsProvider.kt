@@ -70,6 +70,39 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         userManager = context.getSystemService(Context.USER_SERVICE) as UserManager
         launchApps = context.getSystemService(Context.LAUNCHER_APPS_SERVICE) as LauncherApps
         appstateListener = AppStateListener(updater)
+        // FDE-X11 在 setTaskDescription（标题/图标变化）后发广播，广播里带 taskId + icon。
+        // 不能只 updateDockAppLocked()：getRunningTasks() 后续返回的 taskDescription.icon
+        // 是 null，靠重新拉取永远拿不到新图标。这里直接用广播里的 Bitmap 更新缓存条目。
+        try {
+            context.registerReceiver(object : android.content.BroadcastReceiver() {
+                override fun onReceive(c: android.content.Context?, i: android.content.Intent?) {
+                    val taskId = i?.getIntExtra("taskId", -1) ?: -1
+                    val icon: android.graphics.Bitmap? =
+                        i?.getParcelableExtra("icon")
+                    val title = i?.getStringExtra("title")
+                    Log.d(TAG, "TASK_DESCRIPTION_UPDATED taskId=$taskId icon=${icon != null}"
+                            + " title=$title")
+                    mainHandler.post {
+                        val targets = ArrayList<TaskInfo>()
+                        activeDockApps.filterTo(targets) { it.id == taskId }
+                        persistDockApps.filterTo(targets) { it.id == taskId }
+                        targets.forEach { info ->
+                            if (icon != null) {
+                                info.icon = BitmapDrawable(icon)
+                                info.iconPath = null
+                            }
+                            // 不动 program：它是 val，且 dock 显示用的是 X 窗口的 label
+                            // （"FDE::TITLE::" + label），由 topTask 从 taskDescription 解析。
+                        }
+                        Log.d(TAG, "TASK_DESCRIPTION_UPDATED applied to ${targets.size} entries")
+                        appstateListener.updateDockAppLocked()
+                    }
+                }
+            }, android.content.IntentFilter("com.fde.x11.TASK_DESCRIPTION_UPDATED"),
+                android.content.Context.RECEIVER_EXPORTED)
+        } catch (t: Throwable) {
+            Log.e(TAG, "register task description receiver failed: $t")
+        }
         // Android 17: desktop mode keeps multiple tasks RESUMED, so onTaskStackChanged may not
         // fire when focus switches between visible windows. onTaskFocusChanged is the reliable
         // signal for updating the dock selection.
@@ -109,10 +142,14 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
 
     private fun generateX11TaskInfo(packageName : String, type: Int): TaskInfo? {
         val names = packageName.split("#")
+        // key/program 保持原样：dock 现有条目、SP 持久化、isLinux() 判定都依赖
+        // "FDE::TITLE::" 前缀，改 key 会导致条目全部对不上（图标全丢）。
+        // 只把前缀去掉后用于匹配应用列表（终端/浏览器的标题不是应用名）。
+        val matchLabel = names[1].removePrefix("FDE::TITLE::")
         val task = TaskInfo(packageName, names[1])
         val overviewAppData = updater.getOverviewAppData()
         val appData = overviewAppData.firstOrNull{
-            it.fileName?.contains(names[1]) ?: false
+            it.fileName?.contains(matchLabel) ?: false
         }
         val intent = Intent(Intent.ACTION_VIEW)
         intent.setDataAndType(Uri.EMPTY, "application/vnd.desktop")
@@ -318,12 +355,19 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
                 // 因为此时 icon 已经不是 null 了。
                 // 这里对 Linux 窗口退回到应用自带的默认图标。
                 val descIcon = runningTaskInfo.taskDescription!!.icon
+                Log.d("DockIconDbg", "topTask pkg=$packageName taskDescIcon=" + descIcon
+                        + " oldIcon=" + taskInfo?.icon + " iconPath=" + taskInfo?.iconPath)
                 taskInfo?.icon = if (descIcon != null) {
+                    // 有真实窗口图标时，清掉 generateX11TaskInfo() 里"按窗口标题匹配
+                    // 应用列表"得到的 iconPath —— DockAppAdapter 会优先用 iconPath，
+                    // 不清掉的话 dock 显示的永远是旧图标/错图标。
+                    taskInfo?.iconPath = null
                     BitmapDrawable(descIcon)
-                } else if (context != null) {
-                    context.getDrawable(R.drawable.linux_x11)
                 } else {
-                    null
+                    // taskDescription.icon 可能会在后续轮询里变回 null（X 侧图标只在
+                    // 启动时带过来一次）。这时不能把它覆盖成默认图，否则热启动的窗口
+                    // 图标会被抹掉 —— 保留上一次已知的好图标。
+                    taskInfo?.icon ?: context?.getDrawable(R.drawable.linux_x11)
                 }
             } else if (taskInfo?.icon == null && infoList.size > 0 && infoList[0] != null) {
                 taskInfo?.icon = infoList[0]!!.getIcon(0)
@@ -334,7 +378,19 @@ class DockAppsProvider(private val context: Context, private val updater: DockTa
         icon = if (icon == null && context != null)  context.getDrawable(R.mipmap.default_icon_round) else icon
         taskInfo?.icon = icon
         Log.d(TAG, "icon: ${taskInfo?.icon}")
+        // app.icon 只在创建/持久化时写入一次；topTask 更新的是临时对象，dock 列表里
+        // 缓存的 TaskInfo 还留着旧图标，adapter 刷新时拿到的是旧值。
+        // 这里把同一图标回写到缓存条目，保证下次 onBindViewHolder 用的是最新图标。
+        val pkg = taskInfo?.packageName
+        if (pkg != null) {
+            activeDockApps.firstOrNull { TextUtils.equals(it.packageName, pkg) }?.icon = icon
+            persistDockApps.firstOrNull { TextUtils.equals(it.packageName, pkg) }?.icon = icon
+        }
         updater.setTop(taskInfo, needAdd, isTop)
+        Log.d("DockIconDbg", "setTop pkg=${taskInfo?.packageName} icon=${taskInfo?.icon}"
+                + " cachedActive=" + activeDockApps.firstOrNull {
+                    TextUtils.equals(it.packageName, taskInfo?.packageName)
+                }?.icon)
     }
 
     private fun isActiveApp(packageName: String): Boolean {

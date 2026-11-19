@@ -107,6 +107,9 @@ class DockAppAdapter(private val context: Context) :
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val app = apps[position]
         val info = app.linuxInfo
+        Log.d("DockIconDbg", "bind pkg=${app.packageName} platform=${app.platformType}"
+                + " appIcon=${app.icon} info=${info != null} iconPath=${info?.iconPath}"
+                + " iconType=${info?.iconType}")
         var loadMsg: String? = null
         Glide.with(GlobalSystemUIContext.getContext()!!).clear(holder.iconIV) 
         if(ACTION_OPEN_TRASH.equals(app.action)){
@@ -133,6 +136,12 @@ class DockAppAdapter(private val context: Context) :
                 loadMsg = "load ANDROID ${e.message}"
                 e.printStackTrace()
             }
+        } else if(app.icon != null && app.platformType == PLATFORM_TYPE_X11) {
+            // X11 运行中窗口：优先用 TaskInfo.icon（DockAppsProvider 从窗口的
+            // taskDescription.icon 写入的真实程序图标）。放在 iconPath 分支之前，
+            // 否则会被"按窗口标题匹配应用列表"得到的 png/svg 路径覆盖/丢失。
+            holder.iconIV.setImageDrawable(app.icon)
+            loadMsg = "load X11 TASK ICON"
         } else if(info != null && info.iconType.equals(ImageUtils.SURFFIX_PNG)){
             Log.d(TAG, "Glide with png: ${Utils.linuxRootPath}${info.iconPath}")
             updateIconPath(app)
