@@ -88,6 +88,10 @@ class AppOverviewWindow(
     var blurWallPaperRadius : Float ?= 0.0f
     var div : Int  = 1
     var rowSpacingPx: Int = 0
+    /** Height (px) available for the app grid, between the search bar and the indicator. */
+    private var gridAvailableHeightPx: Int = 0
+    /** Height (px) of one app cell, i.e. overview_app_height. */
+    private var gridItemHeightPx: Int = 0
     var dockScaleFactor: Float = 1.0f
         set(value) {
             if (field == value) {
@@ -476,22 +480,50 @@ class AppOverviewWindow(
         return max(1, rows)
     }
 
+    /**
+     * Row spacing used to lay out [rows] rows in [availableHeight].
+     *
+     * The spare height is shared between all the gaps of the grid (above the first row, between
+     * rows and below the last row), so the grid stays centered. The spacing itself is capped at
+     * [maxRowSpacing] so a page that only fits one or two rows (e.g. display size set to its
+     * maximum) keeps them together as a compact block in the middle instead of pinning one row to
+     * the search bar and the next one to the dock. Whatever the cap leaves is turned into the
+     * top/bottom padding by [gridVerticalPaddingFor] (completely filled pages only).
+     */
     private fun calculateRowSpacing(
         availableHeight: Int,
         itemHeight: Int,
         rows: Int,
-        minRowSpacing: Int
+        minRowSpacing: Int,
+        maxRowSpacing: Int,
     ): Int {
         if (rows <= 1) {
             return 0
         }
-        val remainingHeight = availableHeight - rows * itemHeight
-        if (remainingHeight <= 0) {
-            // Slightly over-full page (a few px); let rows touch rather than shifting them
-            // outside the content area.
+        val contentHeight = rows * itemHeight + (rows - 1) * minRowSpacing
+        val spare = max(0, availableHeight - contentHeight)
+        // An extra gap above, between and below the rows: rows + 1 slots.
+        val evenExtra = spare / (rows + 1)
+        val maxExtra = max(0, maxRowSpacing - minRowSpacing)
+        return minRowSpacing + minOf(evenExtra, maxExtra)
+    }
+
+    /**
+     * Padding (px) that keeps the rows of a **completely filled** page centered inside the pager
+     * area. As soon as a page has a free cell (last page, filtered result) it keeps the normal
+     * top-aligned grid, so a half-empty page does not look like a block floating in the middle of
+     * the screen.
+     */
+    fun gridVerticalPaddingFor(itemCount: Int): Int {
+        if (itemCount <= 0 || gridItemHeightPx <= 0) {
             return 0
         }
-        return max(minRowSpacing, remainingHeight / (rows - 1))
+        if (itemCount < div * NUMBER_OF_COLUMNS) {
+            return 0
+        }
+        val rows = (itemCount + NUMBER_OF_COLUMNS - 1) / NUMBER_OF_COLUMNS
+        val contentHeight = rows * gridItemHeightPx + max(0, rows - 1) * rowSpacingPx
+        return max(0, (gridAvailableHeightPx - contentHeight) / 2)
     }
 
     private fun updateGridMetrics() {
@@ -506,6 +538,8 @@ class AppOverviewWindow(
             getContext().resources.getDimensionPixelSize(R.dimen.overview_app_height)
         val minRowSpacing =
             getContext().resources.getDimensionPixelSize(R.dimen.overview_row_spacing_min)
+        val maxRowSpacing =
+            getContext().resources.getDimensionPixelSize(R.dimen.overview_row_spacing_max)
         val availableHeight = max(0, screenHeight - topInset - bottomInset)
         // The original 190dp item only fits two rows on the secondary HDMI density. Allow a
         // small tolerance (5% of one item) on secondary displays so a row that overflows by
@@ -523,11 +557,14 @@ class AppOverviewWindow(
             itemHeight,
             div,
             minRowSpacing,
+            maxRowSpacing,
         )
+        gridAvailableHeightPx = availableHeight
+        gridItemHeightPx = itemHeight
         Log.d(
             TAG,
             "updateGridMetrics: $topInset $bottomInset $screenHeight $itemHeight " +
-                "$div $rowSpacingPx",
+                "$div $rowSpacingPx padding=${gridVerticalPaddingFor(div * NUMBER_OF_COLUMNS)}",
         )
     }
 
@@ -591,6 +628,9 @@ class AppsPagerAdapter(
 //        val recycleView = LoadedOverviewRecycleView(container.context)
         recycleView.overviewWindow = appOverviewWindow
         recycleView.setGridConfig(appOverviewWindow.div, appOverviewWindow.rowSpacingPx)
+        recycleView.setGridVerticalPadding(
+            appOverviewWindow.gridVerticalPaddingFor(appPages[position].size)
+        )
         recycleView.setData(appPages[position])
         val params = LayoutParams(MATCH_PARENT, WRAP_CONTENT)
         container.addView(view, params)

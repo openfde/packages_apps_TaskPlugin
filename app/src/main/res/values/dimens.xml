@@ -168,6 +168,8 @@
     <dimen name="overview_app_height">190dp</dimen>
     <dimen name="overview_app_width">188dp</dimen>
     <dimen name="overview_row_spacing_min">1dp</dimen>
+    <!-- 行间距在上限内平分剩余高度；超出部分变成上下留白，保证行始终整体居中 -->
+    <dimen name="overview_row_spacing_max">16dp</dimen>
     <dimen name="overview_margin_top">105dp</dimen>
     <dimen name="overview_margin_bottom">135dp</dimen>
     <dimen name="overview_indicator_margin">100dp</dimen>
