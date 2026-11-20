@@ -5,7 +5,6 @@ import android.app.ActivityManager
 import android.app.PendingIntent
 import android.content.ActivityNotFoundException
 import android.content.BroadcastReceiver
-import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.IntentFilter
@@ -54,6 +53,7 @@ import com.fde.taskplugin.utils.HostActivityManager
 import com.fde.taskplugin.utils.HostDesktopMode
 import com.fde.taskplugin.utils.LaunchUtils
 import com.fde.taskplugin.utils.ScreenSizeUtils
+import com.fde.taskplugin.utils.SettingsLauncher
 import com.fde.taskplugin.utils.Utils
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.TYPE_ALL
 import com.fde.taskplugin.view.AppOverviewWindow.Companion.WINDOW_PADDING
@@ -154,6 +154,7 @@ constructor(
     companion object {
         private const val TAG = "DockAppsLayout"
         private const val ACTION_SHORT_CUT = "com.android.launcher3.action.ADD_SHORT_CUT"
+        private const val TEXT_READING_ACTION = "android.settings.TEXT_READING_SETTINGS"
         private const val DRAG_LONG_PRESS_TIMEOUT = 100L
         private const val PREVIEW_SHOW_DELAY = 350L
         private const val PREVIEW_HIDE_DELAY = 220L
@@ -1021,11 +1022,8 @@ constructor(
         } else if(dockContext.taskInfo == null){
             when(dockContext.name){
                 resources.getString(R.string.dock_settings) ->{
-                    val intent = Intent()
-                    val cn: ComponentName? = ComponentName.unflattenFromString("com.android.settings/.TextReadingForSetupWizardActivity")
-                    intent.component = cn;
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    context.startActivity(intent)
+                    // Settings$TextReadingSettingsActivity 的 action
+                    SettingsLauncher.open(context, Intent(TEXT_READING_ACTION))
                 }
                 resources.getString(R.string.close_overview) ->{
                     appOverviewWindow?.dismiss()
@@ -1127,11 +1125,7 @@ constructor(
                 }
             }
             resources.getString(R.string.dock_settings) ->{
-                val intent = Intent()
-                val cn: ComponentName? = ComponentName.unflattenFromString("com.android.settings/.TextReadingForSetupWizardActivity")
-                intent.component = cn;
-                intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                context.startActivity(intent)
+                SettingsLauncher.open(context, Intent(TEXT_READING_ACTION))
             }
             resources.getString(R.string.todesk) ->{
                 val inte = Intent(ACTION_SHORT_CUT)

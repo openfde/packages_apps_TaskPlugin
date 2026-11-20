@@ -13,6 +13,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.SystemClock
 import android.os.UserHandle
+import android.provider.Settings
 import com.fde.taskplugin.AppTask
 import com.fde.taskplugin.GlobalSystemUIContext
 import com.fde.taskplugin.Log
@@ -389,9 +390,14 @@ object AppUtils {
     }
 
     public fun toConpatiblePage(mContext: Context, packageName: String, appName: String) {
-        val intent = Intent()
-        val cn: ComponentName? = ComponentName.unflattenFromString("com.android.settings/.Settings\$PrivacyDashboardActivity")
-        intent.component = cn;
+        // 「应用兼容设置」页：用 Settings 声明的 action，不再直接指定
+        // com.android.settings/.Settings$PrivacyDashboardActivity 组件。
+        // 注意 action 的命名空间是 android.settings.*：Settings 的清单里注册的是
+        // android.settings.COMPATIBLE_SETTINGS（Settings$PrivacyDashboardActivity, exported=true,
+        // FRAGMENT_CLASS = com.android.settings.compatible.SetCompatibleFragment），
+        // 写成 com.android.settings.COMPATIBLE_SETTINGS 是解析不到任何 Activity 的。
+        // 页面里的 Fragment 只读 packageName / keyCode / activityName 三个 extra。
+        val intent = Intent("android.settings.COMPATIBLE_SETTINGS")
         intent.putExtra("appName", appName)
         intent.putExtra("packageName",packageName)
         intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK

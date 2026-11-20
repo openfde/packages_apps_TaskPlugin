@@ -83,6 +83,19 @@ constructor(
         }
     }
 
+    /**
+     * The RecyclerView itself keeps filling the page (paging/scroll behaviour is unchanged); this
+     * padding only keeps a completely filled page's grid vertically centered inside it, e.g. when
+     * a page only has two rows because the display size is set to its maximum. Pages with any free
+     * cell (last page, filtered result) keep the normal top-aligned grid (padding stays 0).
+     */
+    fun setGridVerticalPadding(paddingPx: Int) {
+        if (paddingTop == paddingPx && paddingBottom == paddingPx) {
+            return
+        }
+        setPadding(paddingLeft, paddingPx, paddingRight, paddingPx)
+    }
+
     private class RowSpacingDecoration(private val columns: Int, private val rowSpacingPx: Int) :
         RecyclerView.ItemDecoration() {
         override fun getItemOffsets(
